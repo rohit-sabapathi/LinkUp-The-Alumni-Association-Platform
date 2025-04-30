@@ -16,6 +16,9 @@ import EventList from './components/events/EventList';
 import EventDetail from './components/events/EventDetail';
 import EventForm from './components/events/EventForm';
 import NetworkingHome from './components/networking/NetworkingHome';
+import SmartNest from './components/smartnest/SmartNest';
+import ProjectCollaboration from './components/smartnest/ProjectCollaboration';
+import Mentorship from './components/smartnest/Mentorship';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationHome from './components/donations/DonationHome';
@@ -114,6 +117,33 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <NetworkingHome />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest"
+            element={
+              <ProtectedRoute>
+                <SmartNest />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/projects"
+            element={
+              <ProtectedRoute>
+                <ProjectCollaboration />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/mentorship"
+            element={
+              <ProtectedRoute>
+                <Mentorship />
               </ProtectedRoute>
             }
           />

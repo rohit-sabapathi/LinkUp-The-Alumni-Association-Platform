@@ -7,7 +7,8 @@ import {
     CalendarIcon,
     ChatBubbleLeftRightIcon,
     BellIcon,
-    HeartIcon
+    HeartIcon,
+    LightBulbIcon
 } from '@heroicons/react/24/outline';
 
 const Navbar = () => {
@@ -22,6 +23,7 @@ const Navbar = () => {
         { path: '/', icon: HomeIcon, label: 'Feed' },
         { path: '/jobs', icon: BriefcaseIcon, label: 'Jobs' },
         { path: '/networking', icon: UsersIcon, label: 'Networking' },
+        { path: '/smartnest', icon: LightBulbIcon, label: 'SmartNest' },
         { path: '/events', icon: CalendarIcon, label: 'Events' },
         { path: '/donations', icon: HeartIcon, label: 'Donate' },
     ];
