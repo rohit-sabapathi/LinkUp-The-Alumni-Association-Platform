@@ -10,7 +10,7 @@ class UserMinimalSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['id', 'email', 'full_name', 'profile_photo']
+        fields = ['id', 'email', 'full_name', 'profile_picture']
 
     def get_full_name(self, obj):
         return obj.get_full_name()

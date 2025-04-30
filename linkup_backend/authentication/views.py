@@ -6,9 +6,10 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth import get_user_model
 from django.db.models import Q
 from .serializers import UserSerializer, UserRegistrationSerializer
-from .models import UserFollowing, FollowRequest, Notification
+from .models import UserFollowing, FollowRequest, Notification, CustomUser, Skill
 from django.shortcuts import get_object_or_404
 from rest_framework.pagination import PageNumberPagination
+import json
 
 User = get_user_model()
 
@@ -28,6 +29,21 @@ class RegisterView(generics.CreateAPIView):
         serializer = UserRegistrationSerializer(data=request.data)
         if serializer.is_valid():
             user = serializer.save()
+            
+            # Handle skills
+            skills_data = request.data.get('skills')
+            if skills_data:
+                try:
+                    skills_list = json.loads(skills_data)
+                    for skill_name in skills_list:
+                        skill, _ = Skill.objects.get_or_create(
+                            name=skill_name,
+                            defaults={'category': 'TECH'}  # Default category
+                        )
+                        user.skills.add(skill)
+                except json.JSONDecodeError:
+                    pass  # Skip if skills data is invalid
+
             refresh = RefreshToken.for_user(user)
             return Response({
                 'user': UserSerializer(user).data,

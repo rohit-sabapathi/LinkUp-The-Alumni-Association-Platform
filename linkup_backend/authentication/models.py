@@ -18,7 +18,24 @@ class CustomUserManager(BaseUserManager):
         extra_fields.setdefault('is_superuser', True)
         return self.create_user(email, password, **extra_fields)
 
-class User(AbstractUser):
+class Skill(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    category = models.CharField(max_length=50, choices=[
+        ('TECH', 'Technology'),
+        ('EEE', 'Electrical & Electronics'),
+        ('ECE', 'Electronics & Communication'),
+        ('MECH', 'Mechanical'),
+        ('AGRI', 'Agricultural'),
+        ('OTHER', 'Other')
+    ])
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        ordering = ['name']
+
+class CustomUser(AbstractUser):
     class UserType(models.TextChoices):
         ADMIN = 'ADMIN', _('Admin')
         ALUMNI = 'ALUMNI', _('Alumni')
@@ -31,76 +48,61 @@ class User(AbstractUser):
         choices=UserType.choices,
         default=UserType.ALUMNI,
     )
-    profile_photo = models.ImageField(upload_to='profile_photos/', null=True, blank=True)
+    profile_picture = models.ImageField(upload_to='profile_pictures/', null=True, blank=True)
     bio = models.TextField(max_length=500, blank=True)
     graduation_year = models.IntegerField(null=True, blank=True)
     department = models.CharField(max_length=100, blank=True)
-    following = models.ManyToManyField(
-        'self',
-        through='UserFollowing',
-        related_name='followers',
-        symmetrical=False
-    )
+    current_position = models.CharField(max_length=100, blank=True)
+    company = models.CharField(max_length=100, blank=True)
+    location = models.CharField(max_length=100, blank=True)
+    linkedin_profile = models.URLField(max_length=200, blank=True)
+    github_profile = models.URLField(max_length=200, blank=True)
+    website = models.URLField(max_length=200, blank=True)
+    skills = models.ManyToManyField(Skill, related_name='users', blank=True)
 
     USERNAME_FIELD = 'email'
-    REQUIRED_FIELDS = ['username', 'first_name', 'last_name']
-
-    objects = CustomUserManager()
+    REQUIRED_FIELDS = ['username']
 
     def __str__(self):
-        return f"{self.get_full_name()} ({self.email})"
+        return self.email
 
 class UserFollowing(models.Model):
-    user = models.ForeignKey(User, related_name='following_relationships', on_delete=models.CASCADE)
-    following_user = models.ForeignKey(User, related_name='follower_relationships', on_delete=models.CASCADE)
+    user = models.ForeignKey(CustomUser, related_name='following_relationships', on_delete=models.CASCADE)
+    following_user = models.ForeignKey(CustomUser, related_name='follower_relationships', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ['user', 'following_user']
-        
+        unique_together = ('user', 'following_user')
+
     def __str__(self):
-        return f'{self.user.email} follows {self.following_user.email}'
+        return f"{self.user} follows {self.following_user}"
 
 class FollowRequest(models.Model):
-    from_user = models.ForeignKey(User, related_name='sent_follow_requests', on_delete=models.CASCADE)
-    to_user = models.ForeignKey(User, related_name='received_follow_requests', on_delete=models.CASCADE)
+    from_user = models.ForeignKey(CustomUser, related_name='sent_follow_requests', on_delete=models.CASCADE)
+    to_user = models.ForeignKey(CustomUser, related_name='received_follow_requests', on_delete=models.CASCADE)
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(
-        max_length=10,
-        choices=[
-            ('pending', 'Pending'),
-            ('accepted', 'Accepted'),
-            ('declined', 'Declined'),
-        ],
-        default='pending'
-    )
-
-    class Meta:
-        unique_together = ['from_user', 'to_user']
-        ordering = ['-created_at']
-
-    def __str__(self):
-        return f'{self.from_user.get_full_name()} -> {self.to_user.get_full_name()}: {self.status}'
-
-class Notification(models.Model):
-    user = models.ForeignKey(User, related_name='notifications', on_delete=models.CASCADE)
-    title = models.CharField(max_length=100)
-    message = models.TextField()
-    notification_type = models.CharField(
         max_length=20,
         choices=[
-            ('follow_request', 'Follow Request'),
-            ('follow_accepted', 'Follow Request Accepted'),
-            ('follow_declined', 'Follow Request Declined'),
-            ('message', 'New Message'),
-        ]
+            ('PENDING', 'Pending'),
+            ('ACCEPTED', 'Accepted'),
+            ('REJECTED', 'Rejected')
+        ],
+        default='PENDING'
     )
-    related_id = models.IntegerField(null=True, blank=True)  # ID of related object (e.g., follow request ID)
-    is_read = models.BooleanField(default=False)
-    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        ordering = ['-created_at']
+        unique_together = ('from_user', 'to_user')
 
     def __str__(self):
-        return f'{self.user.get_full_name()} - {self.title}'
+        return f"Follow request from {self.from_user} to {self.to_user}"
+
+class Notification(models.Model):
+    user = models.ForeignKey(CustomUser, related_name='notifications', on_delete=models.CASCADE)
+    title = models.CharField(max_length=100)
+    message = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    is_read = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.title} - {self.user}"

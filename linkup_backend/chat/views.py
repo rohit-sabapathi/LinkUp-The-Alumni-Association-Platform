@@ -264,7 +264,16 @@ def get_messageable_users(request):
         'id': user.id,
         'full_name': user.get_full_name(),
         'email': user.email,
-        'profile_photo': user.profile_photo.url if user.profile_photo else None
+        'profile_picture': user.profile_picture.url if user.profile_picture else None
     } for user in messageable_users]
 
     return Response(data)
+
+def get_user_data(user):
+    return {
+        'id': user.id,
+        'email': user.email,
+        'first_name': user.first_name,
+        'last_name': user.last_name,
+        'profile_picture': user.profile_picture.url if user.profile_picture else None
+    }

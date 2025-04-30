@@ -208,7 +208,7 @@ CHANNEL_LAYERS = {
 WEBSOCKET_ACCEPT_ALL = True  # Accept WebSocket connections from all origins in development
 
 # Custom user model
-AUTH_USER_MODEL = 'authentication.User'
+AUTH_USER_MODEL = 'authentication.CustomUser'
 
 # Razorpay settings
 RAZORPAY_KEY_ID = os.getenv('RAZORPAY_KEY_ID')
