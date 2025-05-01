@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import SkillsInput from '../common/SkillsInput';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -11,10 +12,11 @@ const Register = () => {
     firstName: '',
     lastName: '',
     userType: 'STUDENT',
-    profilePhoto: null,
+    profilePicture: null,
     bio: '',
     graduationYear: '',
-    department: ''
+    department: '',
+    skills: []
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,10 +32,17 @@ const Register = () => {
     }));
   };
 
+  const handleSkillsChange = (newSkills) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: newSkills
+    }));
+  };
+
   const handleFileChange = (e) => {
     setFormData(prev => ({
       ...prev,
-      profilePhoto: e.target.files[0]
+      profilePicture: e.target.files[0]
     }));
   };
 
@@ -64,9 +73,10 @@ const Register = () => {
       formDataToSend.append('bio', formData.bio || '');
       formDataToSend.append('graduation_year', formData.graduationYear || '');
       formDataToSend.append('department', formData.department || '');
+      formDataToSend.append('skills', JSON.stringify(formData.skills));
       
-      if (formData.profilePhoto) {
-        formDataToSend.append('profile_photo', formData.profilePhoto);
+      if (formData.profilePicture) {
+        formDataToSend.append('profile_picture', formData.profilePicture);
       }
 
       await register(formDataToSend);
@@ -186,12 +196,12 @@ const Register = () => {
             </div>
 
             <div>
-              <label htmlFor="profilePhoto" className="block text-sm font-medium text-slate-200">
+              <label htmlFor="profilePicture" className="block text-sm font-medium text-slate-200">
                 Profile Photo
               </label>
               <input
-                id="profilePhoto"
-                name="profilePhoto"
+                id="profilePicture"
+                name="profilePicture"
                 type="file"
                 accept="image/*"
                 className="mt-1 block w-full text-sm text-slate-200
@@ -247,6 +257,16 @@ const Register = () => {
             </div>
 
             <div>
+              <label htmlFor="skills" className="block text-sm font-medium text-slate-200 mb-1">
+                Skills
+              </label>
+              <SkillsInput
+                selectedSkills={formData.skills}
+                onSkillsChange={handleSkillsChange}
+              />
+            </div>
+
+            <div>
               <label htmlFor="password" className="block text-sm font-medium text-slate-200">
                 Password
               </label>
@@ -281,9 +301,13 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
+                loading
+                  ? 'bg-blue-400 cursor-not-allowed'
+                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
+              }`}
             >
-              {loading ? 'Creating account...' : 'Create account'}
+              {loading ? 'Registering...' : 'Register'}
             </button>
           </div>
         </form>

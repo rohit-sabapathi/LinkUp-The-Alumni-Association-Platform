@@ -415,11 +415,11 @@ const ChatRoom = ({ roomId, onNewMessage }) => {
       {/* Chat Header */}
       {otherUser && (
         <div className="p-4 border-b border-slate-700 flex items-center space-x-3">
-          {otherUser.profile_photo ? (
+          {otherUser.profile_picture ? (
             <img
-              src={otherUser.profile_photo}
+              src={otherUser.profile_picture}
               alt={otherUser.full_name}
-              className="w-10 h-10 rounded-full object-cover"
+              className="h-8 w-8 rounded-full object-cover"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white">

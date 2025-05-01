@@ -103,9 +103,9 @@ const NewChatButton = ({ onChatCreated }) => {
                   className="w-full px-4 py-2 text-left hover:bg-slate-700 focus:outline-none transition-colors duration-150"
                 >
                   <div className="flex items-center space-x-3">
-                    {user.profile_photo ? (
+                    {user.profile_picture ? (
                       <img
-                        src={user.profile_photo}
+                        src={user.profile_picture}
                         alt={user.full_name || user.email}
                         className="w-8 h-8 rounded-full object-cover bg-slate-600"
                         onError={(e) => {

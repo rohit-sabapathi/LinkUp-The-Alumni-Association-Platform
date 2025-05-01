@@ -87,11 +87,11 @@ const PostCard = ({ post, onPostUpdate }) => {
           to={`/profile/${post.author.id}`}
           className="flex items-center hover:text-blue-500 transition-colors"
         >
-          {post.author.profile_photo ? (
+          {post.author.profile_picture ? (
             <img 
-              src={post.author.profile_photo} 
-              alt={displayName}
-              className="w-10 h-10 rounded-full object-cover mr-3"
+              src={post.author.profile_picture}
+              alt={post.author.full_name}
+              className="h-10 w-10 rounded-full object-cover mr-3"
             />
           ) : (
             <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center mr-3">

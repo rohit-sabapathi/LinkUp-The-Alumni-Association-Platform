@@ -22,9 +22,9 @@ const ChatRoomList = ({ chatRooms, selectedRoomId }) => {
         >
           <div className="p-4 flex items-start space-x-3">
             {/* User Avatar */}
-            {room.other_user.profile_photo ? (
+            {room.other_user.profile_picture ? (
               <img
-                src={room.other_user.profile_photo}
+                src={room.other_user.profile_picture}
                 alt={`${room.other_user.first_name} ${room.other_user.last_name}`}
                 className="w-12 h-12 rounded-full object-cover"
               />

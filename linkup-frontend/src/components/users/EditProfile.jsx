@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
+import SkillsInput from '../common/SkillsInput';
 import toast from 'react-hot-toast';
 
 const EditProfile = () => {
@@ -14,7 +15,14 @@ const EditProfile = () => {
     bio: '',
     department: '',
     graduation_year: '',
-    profile_photo: null
+    profile_picture: null,
+    current_position: '',
+    company: '',
+    location: '',
+    linkedin_profile: '',
+    github_profile: '',
+    website: '',
+    skills: []
   });
 
   useEffect(() => {
@@ -25,9 +33,16 @@ const EditProfile = () => {
         bio: currentUser.bio || '',
         department: currentUser.department || '',
         graduation_year: currentUser.graduation_year || '',
-        profile_photo: null
+        profile_picture: null,
+        current_position: currentUser.current_position || '',
+        company: currentUser.company || '',
+        location: currentUser.location || '',
+        linkedin_profile: currentUser.linkedin_profile || '',
+        github_profile: currentUser.github_profile || '',
+        website: currentUser.website || '',
+        skills: currentUser.skills?.map(skill => skill.name) || []
       });
-      setImagePreview(currentUser.profile_photo);
+      setImagePreview(currentUser.profile_picture);
     }
   }, [currentUser]);
 
@@ -39,12 +54,19 @@ const EditProfile = () => {
     }));
   };
 
+  const handleSkillsChange = (newSkills) => {
+    setFormData(prev => ({
+      ...prev,
+      skills: newSkills
+    }));
+  };
+
   const handleFileChange = (e) => {
     const file = e.target.files[0];
     if (file) {
       setFormData(prev => ({
         ...prev,
-        profile_photo: file
+        profile_picture: file
       }));
       setImagePreview(URL.createObjectURL(file));
     }
@@ -58,19 +80,24 @@ const EditProfile = () => {
       const formDataToSend = new FormData();
       
       // Append text fields
-      formDataToSend.append('first_name', formData.first_name);
-      formDataToSend.append('last_name', formData.last_name);
-      formDataToSend.append('bio', formData.bio || '');
-      formDataToSend.append('department', formData.department || '');
-      formDataToSend.append('graduation_year', formData.graduation_year || '');
+      Object.keys(formData).forEach(key => {
+        if (key === 'profile_picture' || key === 'skills') return;
+        if (formData[key]) {
+          formDataToSend.append(key, formData[key]);
+        }
+      });
+      
+      // Append skills as JSON string
+      formDataToSend.append('skills', JSON.stringify(formData.skills));
       
       // Append profile photo only if a new one is selected
-      if (formData.profile_photo) {
-        formDataToSend.append('profile_photo', formData.profile_photo);
+      if (formData.profile_picture) {
+        formDataToSend.append('profile_picture', formData.profile_picture);
       }
 
       await updateProfile(formDataToSend);
       navigate(`/profile/${currentUser.id}`);
+      toast.success('Profile updated successfully');
     } catch (err) {
       console.error('Profile update error:', err);
       toast.error('Failed to update profile. Please try again.');
@@ -118,81 +145,208 @@ const EditProfile = () => {
             </div>
           </div>
 
-          {/* First Name */}
-          <div>
-            <label htmlFor="first_name" className="block text-sm font-medium text-slate-300">
-              First Name
-            </label>
-            <input
-              type="text"
-              id="first_name"
-              name="first_name"
-              value={formData.first_name}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          {/* Basic Info Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-300">Basic Information</h2>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* First Name */}
+              <div>
+                <label htmlFor="first_name" className="block text-sm font-medium text-slate-300">
+                  First Name
+                </label>
+                <input
+                  type="text"
+                  id="first_name"
+                  name="first_name"
+                  value={formData.first_name}
+                  onChange={handleChange}
+                  required
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Last Name */}
+              <div>
+                <label htmlFor="last_name" className="block text-sm font-medium text-slate-300">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  id="last_name"
+                  name="last_name"
+                  value={formData.last_name}
+                  onChange={handleChange}
+                  required
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            {/* Bio */}
+            <div>
+              <label htmlFor="bio" className="block text-sm font-medium text-slate-300">
+                Bio
+              </label>
+              <textarea
+                id="bio"
+                name="bio"
+                value={formData.bio}
+                onChange={handleChange}
+                rows="4"
+                className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+          </div>
+
+          {/* Academic Info Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-300">Academic Information</h2>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Department */}
+              <div>
+                <label htmlFor="department" className="block text-sm font-medium text-slate-300">
+                  Department
+                </label>
+                <input
+                  type="text"
+                  id="department"
+                  name="department"
+                  value={formData.department}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Graduation Year */}
+              <div>
+                <label htmlFor="graduation_year" className="block text-sm font-medium text-slate-300">
+                  Graduation Year
+                </label>
+                <input
+                  type="number"
+                  id="graduation_year"
+                  name="graduation_year"
+                  value={formData.graduation_year}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Professional Info Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-300">Professional Information</h2>
+            
+            <div className="grid grid-cols-2 gap-4">
+              {/* Current Position */}
+              <div>
+                <label htmlFor="current_position" className="block text-sm font-medium text-slate-300">
+                  Current Position
+                </label>
+                <input
+                  type="text"
+                  id="current_position"
+                  name="current_position"
+                  value={formData.current_position}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Company */}
+              <div>
+                <label htmlFor="company" className="block text-sm font-medium text-slate-300">
+                  Company
+                </label>
+                <input
+                  type="text"
+                  id="company"
+                  name="company"
+                  value={formData.company}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+
+              {/* Location */}
+              <div>
+                <label htmlFor="location" className="block text-sm font-medium text-slate-300">
+                  Location
+                </label>
+                <input
+                  type="text"
+                  id="location"
+                  name="location"
+                  value={formData.location}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Skills Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-300">Skills</h2>
+            <SkillsInput
+              selectedSkills={formData.skills}
+              onSkillsChange={handleSkillsChange}
             />
           </div>
 
-          {/* Last Name */}
-          <div>
-            <label htmlFor="last_name" className="block text-sm font-medium text-slate-300">
-              Last Name
-            </label>
-            <input
-              type="text"
-              id="last_name"
-              name="last_name"
-              value={formData.last_name}
-              onChange={handleChange}
-              required
-              className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+          {/* Social Links Section */}
+          <div className="space-y-4">
+            <h2 className="text-lg font-semibold text-slate-300">Social Links</h2>
+            
+            <div className="space-y-4">
+              {/* LinkedIn */}
+              <div>
+                <label htmlFor="linkedin_profile" className="block text-sm font-medium text-slate-300">
+                  LinkedIn Profile URL
+                </label>
+                <input
+                  type="url"
+                  id="linkedin_profile"
+                  name="linkedin_profile"
+                  value={formData.linkedin_profile}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          {/* Bio */}
-          <div>
-            <label htmlFor="bio" className="block text-sm font-medium text-slate-300">
-              Bio
-            </label>
-            <textarea
-              id="bio"
-              name="bio"
-              value={formData.bio}
-              onChange={handleChange}
-              rows="4"
-              className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
+              {/* GitHub */}
+              <div>
+                <label htmlFor="github_profile" className="block text-sm font-medium text-slate-300">
+                  GitHub Profile URL
+                </label>
+                <input
+                  type="url"
+                  id="github_profile"
+                  name="github_profile"
+                  value={formData.github_profile}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
 
-          {/* Department */}
-          <div>
-            <label htmlFor="department" className="block text-sm font-medium text-slate-300">
-              Department
-            </label>
-            <input
-              type="text"
-              id="department"
-              name="department"
-              value={formData.department}
-              onChange={handleChange}
-              className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
-          </div>
-
-          {/* Graduation Year */}
-          <div>
-            <label htmlFor="graduation_year" className="block text-sm font-medium text-slate-300">
-              Graduation Year
-            </label>
-            <input
-              type="number"
-              id="graduation_year"
-              name="graduation_year"
-              value={formData.graduation_year}
-              onChange={handleChange}
-              className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
-            />
+              {/* Personal Website */}
+              <div>
+                <label htmlFor="website" className="block text-sm font-medium text-slate-300">
+                  Personal Website URL
+                </label>
+                <input
+                  type="url"
+                  id="website"
+                  name="website"
+                  value={formData.website}
+                  onChange={handleChange}
+                  className="mt-1 block w-full bg-slate-700 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
           </div>
 
           {/* Submit Button */}
@@ -200,7 +354,9 @@ const EditProfile = () => {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
+              className={`px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 ${
+                loading ? 'cursor-not-allowed' : ''
+              }`}
             >
               {loading ? 'Saving...' : 'Save Changes'}
             </button>

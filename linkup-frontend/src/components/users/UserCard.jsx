@@ -9,11 +9,11 @@ const UserCard = ({ user, onFollowChange }) => {
   return (
     <div className="bg-slate-800 rounded-lg p-4 flex items-center justify-between">
       <Link to={`/profile/${user.id}`} className="flex items-center space-x-3 flex-1">
-        {user.profile_photo ? (
+        {user.profile_picture ? (
           <img
-            src={user.profile_photo}
+            src={user.profile_picture}
             alt={user.full_name}
-            className="w-12 h-12 rounded-full object-cover"
+            className="h-12 w-12 rounded-full object-cover"
           />
         ) : (
           <div className="w-12 h-12 rounded-full bg-slate-600 flex items-center justify-center">

@@ -54,9 +54,9 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
     <div className="bg-slate-800 rounded-lg shadow-lg p-4">
       <div className="flex items-center space-x-3 mb-4">
         <img
-          src={user?.profile_photo || '/default-avatar.png'}
-          alt={user?.full_name}
-          className="w-10 h-10 rounded-full object-cover"
+          className="h-10 w-10 rounded-full"
+          src={user?.profile_picture || '/default-avatar.png'}
+          alt={`${user?.first_name || 'User'} avatar`}
         />
         <div className="text-slate-200 font-medium">{user?.full_name}</div>
       </div>

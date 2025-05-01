@@ -85,11 +85,11 @@ const UserProfile = () => {
       <div className="bg-slate-800 rounded-lg p-6 mb-6">
         <div className="flex items-start justify-between">
           <div className="flex items-center space-x-4">
-            {user.profile_photo ? (
+            {user.profile_picture ? (
               <img
-                src={user.profile_photo}
-                alt={user.full_name}
-                className="w-24 h-24 rounded-full object-cover"
+                src={user.profile_picture}
+                alt={`${user.first_name} ${user.last_name}`}
+                className="w-32 h-32 rounded-full object-cover border-4 border-blue-600"
               />
             ) : (
               <div className="w-24 h-24 rounded-full bg-slate-600 flex items-center justify-center">
@@ -137,17 +137,99 @@ const UserProfile = () => {
         </div>
         
         {/* Additional Info */}
-        <div className="mt-4 grid grid-cols-2 gap-4 text-sm">
-          {user.department && (
-            <div className="text-slate-400">
-              <span className="block text-slate-500">Department</span>
-              {user.department}
+        <div className="mt-6 space-y-4">
+          <div className="grid grid-cols-2 gap-4 text-sm">
+            {user.department && (
+              <div className="text-slate-400">
+                <span className="block text-slate-500">Department</span>
+                {user.department}
+              </div>
+            )}
+            {user.graduation_year && (
+              <div className="text-slate-400">
+                <span className="block text-slate-500">Graduation Year</span>
+                {user.graduation_year}
+              </div>
+            )}
+          </div>
+
+          {/* Skills Section */}
+          {user.skills && user.skills.length > 0 && (
+            <div className="pt-4 border-t border-slate-700">
+              <h3 className="text-sm font-medium text-slate-400 mb-2">Skills</h3>
+              <div className="flex flex-wrap gap-2">
+                {user.skills.map((skill) => (
+                  <span
+                    key={skill.id}
+                    className="px-3 py-1 bg-indigo-900/50 text-indigo-300 rounded-full text-sm"
+                  >
+                    {skill.name}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
-          {user.graduation_year && (
-            <div className="text-slate-400">
-              <span className="block text-slate-500">Graduation Year</span>
-              {user.graduation_year}
+
+          {/* Professional Info */}
+          {(user.current_position || user.company || user.location) && (
+            <div className="pt-4 border-t border-slate-700 grid grid-cols-2 gap-4 text-sm">
+              {user.current_position && (
+                <div className="text-slate-400">
+                  <span className="block text-slate-500">Current Position</span>
+                  {user.current_position}
+                </div>
+              )}
+              {user.company && (
+                <div className="text-slate-400">
+                  <span className="block text-slate-500">Company</span>
+                  {user.company}
+                </div>
+              )}
+              {user.location && (
+                <div className="text-slate-400">
+                  <span className="block text-slate-500">Location</span>
+                  {user.location}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Social Links */}
+          {(user.linkedin_profile || user.github_profile || user.website) && (
+            <div className="pt-4 border-t border-slate-700">
+              <h3 className="text-sm font-medium text-slate-400 mb-2">Social Links</h3>
+              <div className="flex space-x-4">
+                {user.linkedin_profile && (
+                  <a
+                    href={user.linkedin_profile}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    LinkedIn
+                  </a>
+                )}
+                {user.github_profile && (
+                  <a
+                    href={user.github_profile}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    GitHub
+                  </a>
+                )}
+                {user.website && (
+                  <a
+                    href={user.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-400 hover:text-blue-300"
+                  >
+                    Website
+                  </a>
+                )}
+              </div>
             </div>
           )}
         </div>

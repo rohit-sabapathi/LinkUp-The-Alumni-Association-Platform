@@ -98,11 +98,11 @@ const ApplicationList = () => {
                 <div className="mb-4">
                   <h4 className="text-sm font-medium text-slate-300 mb-2">Applicant</h4>
                   <div className="flex items-center space-x-3">
-                    {application.applicant.profile_photo ? (
+                    {application.applicant.profile_picture ? (
                       <img
-                        src={application.applicant.profile_photo}
+                        src={application.applicant.profile_picture}
                         alt={application.applicant.full_name}
-                        className="w-10 h-10 rounded-full object-cover"
+                        className="h-10 w-10 rounded-full object-cover"
                       />
                     ) : (
                       <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center text-white">

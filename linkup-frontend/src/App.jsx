@@ -18,6 +18,7 @@ import EventForm from './components/events/EventForm';
 import NetworkingHome from './components/networking/NetworkingHome';
 import SmartNest from './components/smartnest/SmartNest';
 import ProjectCollaboration from './components/smartnest/ProjectCollaboration';
+import ProjectWorkspace from './components/smartnest/ProjectWorkspace';
 import Mentorship from './components/smartnest/Mentorship';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
@@ -26,11 +27,20 @@ import DonationHome from './components/donations/DonationHome';
 const AppContent = () => {
   const location = useLocation();
   const isAuthPage = ['/login', '/register'].includes(location.pathname);
+  const isWorkspacePage = location.pathname.startsWith('/workspace/');
+
+  // Don't render navbar for auth pages or workspace pages
+  const showNavbar = !isAuthPage && !isWorkspacePage;
+  
+  // Don't add container padding for workspace pages
+  const mainClass = isWorkspacePage 
+    ? '' 
+    : `container mx-auto px-4 ${isAuthPage ? '' : 'py-6'}`;
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-200">
-      {!isAuthPage && <Navbar />}
-      <main className={`container mx-auto px-4 ${isAuthPage ? '' : 'py-6'}`}>
+      {showNavbar && <Navbar />}
+      <main className={mainClass}>
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -153,6 +163,16 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <DonationHome />
+              </ProtectedRoute>
+            }
+          />
+          
+          {/* Workspace route - notice no container/padding applied */}
+          <Route
+            path="/workspace/:workspaceId"
+            element={
+              <ProtectedRoute>
+                <ProjectWorkspace />
               </ProtectedRoute>
             }
           />
