@@ -7,7 +7,8 @@ import {
   ChartBarIcon, 
   ShareIcon,
   ArrowTopRightOnSquareIcon,
-  ArrowLeftIcon
+  ArrowLeftIcon,
+  UserGroupIcon
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -30,6 +31,7 @@ const ProjectCollaboration = () => {
   const [loading, setLoading] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
   const [showProjectDetails, setShowProjectDetails] = useState(false);
+  const [isCurrentUserProject, setIsCurrentUserProject] = useState(false);
 
   // Project form state
   const [projectForm, setProjectForm] = useState({
@@ -44,11 +46,15 @@ const ProjectCollaboration = () => {
     projectImage: null
   });
 
+  // Add a new state variable for view mode
+  const [projectViewMode, setProjectViewMode] = useState('cards');
+
   // Fetch projects on component mount
   useEffect(() => {
     const loadProjects = async () => {
       setLoading(true);
       try {
+        // Fetch all projects for the "View Projects" tab
         const projectsData = await fetchProjects();
         setProjects(projectsData);
         
@@ -181,6 +187,11 @@ const ProjectCollaboration = () => {
       // Fetch full project details
       const projectDetails = await fetchProjectById(project.id);
       setCurrentProject(projectDetails);
+      
+      // Check if the current user is the creator of the project
+      const userCreatedProject = userProjects.some(p => p.id === project.id);
+      setIsCurrentUserProject(userCreatedProject);
+      
       setShowProjectDetails(true);
     } catch (error) {
       console.error('Error fetching project details:', error);
@@ -266,8 +277,8 @@ const ProjectCollaboration = () => {
                 <p className="text-slate-300">{currentProject.open_for_collaboration ? 'Yes' : 'No'}</p>
               </div>
               
-              {/* Workspace button */}
-              {currentProject.workspace && (
+              {/* Workspace or Collaboration button */}
+              {isCurrentUserProject && currentProject.workspace && (
                 <button
                   onClick={() => openWorkspace(currentProject.workspace.slug)}
                   className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center space-x-2 transition-colors"
@@ -275,6 +286,22 @@ const ProjectCollaboration = () => {
                   <span>Open Workspace</span>
                   <ArrowTopRightOnSquareIcon className="w-4 h-4" />
                 </button>
+              )}
+              
+              {!isCurrentUserProject && currentProject.open_for_collaboration && (
+                <button
+                  // onClick={() => requestCollaboration(currentProject.id)} - We'll implement this later
+                  className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <span>Request to Collaborate</span>
+                  <UserGroupIcon className="w-4 h-4" />
+                </button>
+              )}
+
+              {!isCurrentUserProject && !currentProject.open_for_collaboration && (
+                <div className="w-full py-3 px-4 bg-slate-700 text-slate-300 rounded-lg flex items-center justify-center space-x-2">
+                  <span>Closed for Collaboration</span>
+                </div>
               )}
             </div>
             
@@ -387,6 +414,13 @@ const ProjectCollaboration = () => {
                 >
                   <PlusIcon className="w-5 h-5 mr-2" />
                   Create New Project
+                </button>
+                <button 
+                  onClick={() => setProjectViewMode('list')}
+                  className="flex items-center px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors duration-200"
+                >
+                  <FolderIcon className="w-5 h-5 mr-2" />
+                  View All Projects
                 </button>
               </div>
             )}
@@ -577,60 +611,147 @@ const ProjectCollaboration = () => {
             )}
 
             {/* Projects List */}
-            {!loading && projects.length > 0 && (
-              <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
-                {projects.map(project => (
-                  <div
-                    key={project.id}
-                    className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
-                    onClick={() => viewProjectDetails(project)}
-                  >
-                    {project.project_image && (
-                      <div className="aspect-video w-full overflow-hidden">
-                        <img 
-                          src={project.project_image} 
-                          alt={project.title} 
-                          className="w-full h-full object-cover"
-                        />
+            {!loading && activeTab === 'projects' && !showProjectForm && (
+              <>
+                {/* List View Mode */}
+                {projectViewMode === 'list' && (
+                  <div className="space-y-4 mt-6">
+                    <div className="flex justify-between items-center mb-6">
+                      <h2 className="text-xl font-bold text-slate-100">All Projects</h2>
+                      <button 
+                        onClick={() => setProjectViewMode('cards')}
+                        className="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg transition-colors"
+                      >
+                        Back to Your Projects
+                      </button>
+                    </div>
+                    
+                    <div className="overflow-hidden bg-slate-800/30 rounded-xl border border-slate-700">
+                      <div className="grid grid-cols-12 bg-slate-800 p-4 border-b border-slate-700 text-sm font-medium text-slate-300">
+                        <div className="col-span-4">Project Name</div>
+                        <div className="col-span-3">Type</div>
+                        <div className="col-span-2">Created</div>
+                        <div className="col-span-2">Open</div>
+                        <div className="col-span-1">Action</div>
                       </div>
-                    )}
-                    <div className="p-5">
-                      <h3 className="text-lg font-semibold text-slate-200 mb-2">{project.title}</h3>
-                      <p className="text-slate-400 text-sm mb-3">{project.short_description}</p>
-                      <div className="flex flex-wrap gap-2 mb-4">
-                        {project.skills && project.skills.slice(0, 3).map((skill, index) => (
-                          <span 
-                            key={index} 
-                            className="bg-indigo-900/30 text-indigo-300 text-xs px-2 py-1 rounded"
+                      
+                      <div className="divide-y divide-slate-700">
+                        {projects.map(project => (
+                          <div 
+                            key={project.id} 
+                            className="grid grid-cols-12 p-4 hover:bg-slate-700/30 transition-colors"
                           >
-                            {skill}
-                          </span>
+                            <div className="col-span-4 font-medium text-slate-200 truncate">{project.title}</div>
+                            <div className="col-span-3 text-indigo-400">{project.project_type}</div>
+                            <div className="col-span-2 text-slate-400 text-sm">
+                              {new Date(project.created_at).toLocaleDateString()}
+                            </div>
+                            <div className="col-span-2">
+                              {project.open_for_collaboration ? (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/30 text-green-400">
+                                  Open
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-700/50 text-slate-400">
+                                  Closed
+                                </span>
+                              )}
+                            </div>
+                            <div className="col-span-1 text-right">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  viewProjectDetails(project);
+                                }}
+                                className="text-indigo-400 hover:text-indigo-300"
+                              >
+                                View
+                              </button>
+                            </div>
+                          </div>
                         ))}
-                        {project.skills && project.skills.length > 3 && (
-                          <span className="bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded">
-                            +{project.skills.length - 3} more
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-500">
-                          {new Date(project.created_at).toLocaleDateString()}
-                        </span>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            viewProjectDetails(project);
-                          }}
-                          className="text-indigo-400 text-sm font-medium hover:text-indigo-300 flex items-center"
-                        >
-                          View Details
-                          <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
-                        </button>
                       </div>
                     </div>
+                    
+                    {projects.length === 0 && (
+                      <div className="text-center text-slate-400 py-12">
+                        No projects available.
+                      </div>
+                    )}
                   </div>
-                ))}
-              </div>
+                )}
+                
+                {/* Cards View Mode - Show user's projects */}
+                {projectViewMode === 'cards' && (
+                  <div>
+                    {userProjects.length > 0 ? (
+                      <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
+                        {userProjects.map(project => (
+                          <div
+                            key={project.id}
+                            className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
+                            onClick={() => viewProjectDetails(project)}
+                          >
+                            {project.project_image && (
+                              <div className="aspect-video w-full overflow-hidden">
+                                <img 
+                                  src={project.project_image} 
+                                  alt={project.title} 
+                                  className="w-full h-full object-cover"
+                                />
+                              </div>
+                            )}
+                            <div className="p-5">
+                              <h3 className="text-lg font-semibold text-slate-200 mb-2">{project.title}</h3>
+                              <p className="text-slate-400 text-sm mb-3">{project.short_description}</p>
+                              <div className="flex flex-wrap gap-2 mb-4">
+                                {project.skills && project.skills.slice(0, 3).map((skill, index) => (
+                                  <span 
+                                    key={index} 
+                                    className="bg-indigo-900/30 text-indigo-300 text-xs px-2 py-1 rounded"
+                                  >
+                                    {skill}
+                                  </span>
+                                ))}
+                                {project.skills && project.skills.length > 3 && (
+                                  <span className="bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded">
+                                    +{project.skills.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-slate-500">
+                                  {new Date(project.created_at).toLocaleDateString()}
+                                </span>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    viewProjectDetails(project);
+                                  }}
+                                  className="text-indigo-400 text-sm font-medium hover:text-indigo-300 flex items-center"
+                                >
+                                  View Details
+                                  <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center text-slate-400 py-8">
+                        <p>You haven't created any projects yet.</p>
+                        <button 
+                          onClick={() => setShowProjectForm(true)}
+                          className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                        >
+                          Create Your First Project
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
             )}
             
             {!loading && projects.length === 0 && !showProjectForm && (
