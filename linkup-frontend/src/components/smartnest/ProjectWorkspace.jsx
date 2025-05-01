@@ -10,6 +10,7 @@ import {
   PaperClipIcon,
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
+import CometChatApp from '../CometChat/App';
 
 const ProjectWorkspace = () => {
   const { workspaceId } = useParams();
@@ -124,32 +125,8 @@ const ProjectWorkspace = () => {
                 <div className="p-4 border-b border-slate-700">
                   <h3 className="font-medium text-slate-300">Team Discussion</h3>
                 </div>
-                <div className="flex-1 p-4 overflow-y-auto flex flex-col justify-center items-center">
-                  <div className="text-slate-400">
-                    <p className="text-center mb-2">Chat functionality coming soon...</p>
-                    <p className="text-center text-sm">Your team conversations will appear here</p>
-                  </div>
-                </div>
-              </div>
-              <div className="bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden">
-                <div className="p-3 border-b border-slate-700 flex items-center">
-                  <button className="p-2 text-slate-400 hover:text-indigo-400">
-                    <PaperClipIcon className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 text-slate-400 hover:text-indigo-400">
-                    <DocumentTextIcon className="w-5 h-5" />
-                  </button>
-                </div>
-                <div className="flex">
-                  <input 
-                    type="text"
-                    placeholder="Type a message..."
-                    className="flex-grow px-4 py-3 bg-transparent border-0 text-slate-200 focus:outline-none"
-                    disabled
-                  />
-                  <button className="px-4 py-3 bg-indigo-600 text-white rounded-r-lg opacity-50 cursor-not-allowed">
-                    Send
-                  </button>
+                <div className="flex-1 overflow-y-auto">
+                  <CometChatApp />
                 </div>
               </div>
             </div>
