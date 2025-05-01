@@ -168,15 +168,27 @@ export const fetchProjectMembers = async (projectId) => {
 };
 
 // Join request functions
-export const createJoinRequest = async (projectId, message = '') => {
+export const createJoinRequest = async (projectId, requestData) => {
   try {
     const response = await axios.post(`${API_URL}/${projectId}/join_request/`, 
-      { message },
+      requestData,
       { headers: getAuthHeader() }
     );
     return response.data;
   } catch (error) {
     throw error.response?.data || { detail: 'Failed to submit join request' };
+  }
+};
+
+export const fetchUserJoinRequests = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/user/join-requests/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user join requests:', error);
+    throw error.response?.data || { detail: 'Failed to fetch user join requests' };
   }
 };
 
@@ -190,18 +202,8 @@ export const fetchProjectJoinRequests = async (projectId, status = null) => {
     });
     return response.data;
   } catch (error) {
+    console.error('Error fetching project join requests:', error);
     throw error.response?.data || { detail: 'Failed to fetch join requests' };
-  }
-};
-
-export const fetchUserJoinRequests = async () => {
-  try {
-    const response = await axios.get(`${API_URL}/user/join-requests/`, {
-      headers: getAuthHeader()
-    });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || { detail: 'Failed to fetch user join requests' };
   }
 };
 
@@ -213,6 +215,7 @@ export const updateJoinRequestStatus = async (requestId, status) => {
     );
     return response.data;
   } catch (error) {
+    console.error('Error updating join request status:', error);
     throw error.response?.data || { detail: 'Failed to update join request status' };
   }
 }; 

@@ -108,8 +108,43 @@ class JoinRequestSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = JoinRequest
-        fields = ['id', 'project', 'project_title', 'user', 'message', 'status', 'created_at']
+        fields = ['id', 'project', 'project_title', 'user', 'message', 'skills', 'expertise', 'motivation', 'status', 'created_at']
         read_only_fields = ['id', 'user', 'status', 'created_at', 'project_title']
+
+class JoinRequestCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = JoinRequest
+        fields = ['project', 'message', 'skills', 'expertise', 'motivation']
+        
+    def create(self, validated_data):
+        user = self.context['request'].user
+        
+        # Check if user is already a member
+        if ProjectMember.objects.filter(project=validated_data['project'], user=user).exists():
+            raise serializers.ValidationError(
+                {"detail": "You are already a member of this project"}
+            )
+        
+        # Check if project is open for collaboration
+        if not validated_data['project'].open_for_collaboration:
+            raise serializers.ValidationError(
+                {"detail": "This project is not open for collaboration"}
+            )
+        
+        # Check if there's an existing pending request
+        existing_request = JoinRequest.objects.filter(
+            project=validated_data['project'], 
+            user=user,
+            status='pending'
+        ).first()
+        
+        if existing_request:
+            raise serializers.ValidationError(
+                {"detail": "You already have a pending request for this project"}
+            )
+        
+        # Create the join request
+        return JoinRequest.objects.create(user=user, **validated_data)
 
 class JoinRequestStatusUpdateSerializer(serializers.ModelSerializer):
     class Meta:

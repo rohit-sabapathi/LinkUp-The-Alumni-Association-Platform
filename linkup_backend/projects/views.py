@@ -3,6 +3,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
+from rest_framework import serializers
 
 from .models import Project, Workspace, ProjectMember, JoinRequest
 from .serializers import (
@@ -12,6 +13,7 @@ from .serializers import (
     WorkspaceSerializer,
     ProjectMemberSerializer,
     JoinRequestSerializer,
+    JoinRequestCreateSerializer,
     JoinRequestStatusUpdateSerializer
 )
 
@@ -74,70 +76,96 @@ class ProjectViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def join_request(self, request, pk=None):
         """
-        Submit a request to join a project
+        Submit a request to join a project with detailed information
         """
         project = self.get_object()
         user = request.user
         
-        # Check if user is already a member
-        if ProjectMember.objects.filter(project=project, user=user).exists():
-            return Response(
-                {"detail": "You are already a member of this project"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        print(f"[JOIN REQUEST] User {user.id} ({user.username}) is requesting to join project {project.id} ({project.title})")
+        print(f"[JOIN REQUEST] Project creator: {project.creator.id} ({project.creator.username})")
+        print(f"[JOIN REQUEST] Request data: {request.data}")
         
-        # Check if project is open for collaboration
-        if not project.open_for_collaboration:
-            return Response(
-                {"detail": "This project is not open for collaboration"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Check if there's an existing pending request
-        existing_request = JoinRequest.objects.filter(
-            project=project, 
-            user=user,
-            status='pending'
-        ).first()
-        
-        if existing_request:
-            return Response(
-                {"detail": "You already have a pending request for this project"}, 
-                status=status.HTTP_400_BAD_REQUEST
-            )
-        
-        # Create the join request
-        message = request.data.get('message', '')
-        join_request = JoinRequest.objects.create(
-            project=project,
-            user=user,
-            message=message
+        # Use the create serializer with the request context
+        serializer = JoinRequestCreateSerializer(
+            data={**request.data, 'project': project.id},
+            context={'request': request}
         )
         
-        serializer = JoinRequestSerializer(join_request)
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        try:
+            serializer.is_valid(raise_exception=True)
+            join_request = serializer.save()
+            
+            print(f"[JOIN REQUEST] Successfully created join request {join_request.id}")
+            
+            # Return the full serialized join request
+            return Response(
+                JoinRequestSerializer(join_request).data,
+                status=status.HTTP_201_CREATED
+            )
+        except serializers.ValidationError as e:
+            print(f"[JOIN REQUEST] Validation error: {str(e)}")
+            raise
+        except Exception as e:
+            print(f"[JOIN REQUEST] Unexpected error: {str(e)}")
+            return Response(
+                {"detail": f"Error creating join request: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['get'])
     def join_requests(self, request, pk=None):
         """
-        Get all join requests for a project (admin only)
+        Get all join requests for a project
         """
-        project = self.get_object()
+        # Important: Log the request parameters
+        print(f"🔍 JOIN REQUESTS ACTION - Project ID: {pk}, User ID: {request.user.id}")
         
-        # Check if user is an admin of the project
-        if not ProjectMember.objects.filter(project=project, user=request.user, role='admin').exists():
-            return Response(
-                {"detail": "You don't have permission to view join requests for this project"}, 
-                status=status.HTTP_403_FORBIDDEN
-            )
-        
-        join_requests = JoinRequest.objects.filter(project=project)
-        status_filter = request.query_params.get('status')
-        if status_filter:
-            join_requests = join_requests.filter(status=status_filter)
+        try:
+            project = self.get_object()
+            user = request.user
             
-        serializer = JoinRequestSerializer(join_requests, many=True)
-        return Response(serializer.data)
+            print(f"🔍 Project found: {project.id} (title: {project.title})")
+            print(f"👤 Request user: {user.id} (username: {user.username})")
+            print(f"👤 Project creator: {project.creator.id} (username: {project.creator.username})")
+            
+            # Check if user is the creator
+            is_creator = (project.creator.id == user.id)
+            
+            # Check if user is an admin
+            is_admin = ProjectMember.objects.filter(
+                project=project, 
+                user=user, 
+                role='admin'
+            ).exists()
+            
+            print(f"🔑 Is creator: {is_creator}, Is admin: {is_admin}")
+            
+            # Allow both creator and admin to view join requests
+            if not (is_creator or is_admin):
+                print("❌ Permission denied: User is neither creator nor admin")
+                return Response(
+                    {"detail": "You don't have permission to view join requests for this project"}, 
+                    status=status.HTTP_403_FORBIDDEN
+                )
+            
+            # Directly query join requests by project ID to avoid any potential cache issues
+            join_requests = JoinRequest.objects.filter(project_id=project.id)
+            
+            if join_requests.exists():
+                print(f"✅ Found {join_requests.count()} join requests")
+                for jr in join_requests:
+                    print(f"  - Request {jr.id}: from {jr.user.username}, status: {jr.status}")
+            else:
+                print("ℹ️ No join requests found for this project")
+            
+            serializer = JoinRequestSerializer(join_requests, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"❌ Error in join_requests action: {str(e)}")
+            return Response(
+                {"detail": f"Error retrieving join requests: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     @action(detail=True, methods=['get'])
     def workspace(self, request, pk=None):
@@ -183,8 +211,9 @@ class JoinRequestViewSet(viewsets.GenericViewSet):
         join_request = self.get_object()
         project = join_request.project
         
-        # Check if user is an admin of the project
-        if not ProjectMember.objects.filter(project=project, user=request.user, role='admin').exists():
+        # Check if user is the creator or an admin of the project
+        if not (project.creator == request.user or 
+                ProjectMember.objects.filter(project=project, user=request.user, role='admin').exists()):
             return Response(
                 {"detail": "You don't have permission to update this join request"}, 
                 status=status.HTTP_403_FORBIDDEN
@@ -203,14 +232,36 @@ class JoinRequestViewSet(viewsets.GenericViewSet):
         )
 
     def get_queryset(self):
-        # Filter requests based on user's admin projects
-        admin_projects = Project.objects.filter(
-            members__user=self.request.user,
-            members__role='admin'
-        )
+        # Show requests for projects where the user is a creator or admin
+        user = self.request.user
+        print(f"🔍 JoinRequestViewSet.get_queryset - User: {user.id} ({user.username})")
         
-        # Show requests for projects where the user is an admin
-        return JoinRequest.objects.filter(project__in=admin_projects)
+        try:
+            # Find projects where user is creator
+            user_created_projects = Project.objects.filter(creator=user)
+            print(f"👑 Projects created by user: {user_created_projects.count()}")
+            
+            # Find projects where user is admin
+            admin_projects = Project.objects.filter(
+                members__user=user,
+                members__role='admin'
+            )
+            print(f"🔑 Projects where user is admin: {admin_projects.count()}")
+            
+            # Use Q objects to combine filters with OR
+            all_requests = JoinRequest.objects.filter(
+                Q(project__in=user_created_projects) | 
+                Q(project__in=admin_projects)
+            ).select_related('project', 'user').distinct()
+            
+            print(f"📨 Total join requests: {all_requests.count()}")
+            for req in all_requests:
+                print(f"  - Request {req.id}: Project '{req.project.title}', From '{req.user.username}', Status: {req.status}")
+            
+            return all_requests
+        except Exception as e:
+            print(f"❌ Error in JoinRequestViewSet.get_queryset: {str(e)}")
+            return JoinRequest.objects.none()
 
 
 class WorkspaceDetailView(generics.RetrieveAPIView):
@@ -276,8 +327,20 @@ class UserJoinRequestsView(generics.ListAPIView):
         user = self.request.user
         status_filter = self.request.query_params.get('status')
         
-        queryset = JoinRequest.objects.filter(user=user)
+        queryset = JoinRequest.objects.filter(user=user).select_related('project')
         if status_filter:
             queryset = queryset.filter(status=status_filter)
             
-        return queryset 
+        return queryset
+    
+    def list(self, request, *args, **kwargs):
+        try:
+            queryset = self.get_queryset()
+            serializer = self.get_serializer(queryset, many=True)
+            return Response(serializer.data)
+        except Exception as e:
+            print(f"Error in UserJoinRequestsView: {str(e)}")
+            return Response(
+                {"detail": "Failed to fetch join requests"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            ) 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { 
   PlusIcon, 
   FolderIcon, 
@@ -8,7 +8,9 @@ import {
   ShareIcon,
   ArrowTopRightOnSquareIcon,
   ArrowLeftIcon,
-  UserGroupIcon
+  UserGroupIcon,
+  CheckIcon,
+  XMarkIcon as XIcon
 } from '@heroicons/react/24/outline';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
@@ -18,8 +20,13 @@ import {
   createProject, 
   fetchProjectById,
   fetchUserProjects,
-  fetchWorkspaceBySlug
+  fetchWorkspaceBySlug,
+  createJoinRequest,
+  fetchUserJoinRequests,
+  fetchProjectJoinRequests,
+  updateJoinRequestStatus
 } from '../../services/projectService';
+import { useAuth } from '../../contexts/AuthContext';
 
 const ProjectCollaboration = () => {
   const navigate = useNavigate();
@@ -32,6 +39,18 @@ const ProjectCollaboration = () => {
   const [currentProject, setCurrentProject] = useState(null);
   const [showProjectDetails, setShowProjectDetails] = useState(false);
   const [isCurrentUserProject, setIsCurrentUserProject] = useState(false);
+  
+  // Join request states
+  const [showJoinRequestForm, setShowJoinRequestForm] = useState(false);
+  const [joinRequestFormData, setJoinRequestFormData] = useState({
+    message: '',
+    skills: [],
+    expertise: '',
+    motivation: ''
+  });
+  const [userJoinRequests, setUserJoinRequests] = useState([]);
+  const [receivedJoinRequests, setReceivedJoinRequests] = useState([]);
+  const [adminProjects, setAdminProjects] = useState([]);
 
   // Project form state
   const [projectForm, setProjectForm] = useState({
@@ -49,6 +68,12 @@ const ProjectCollaboration = () => {
   // Add a new state variable for view mode
   const [projectViewMode, setProjectViewMode] = useState('cards');
 
+  // Add a state variable to track if user has a pending join request
+  const [hasPendingJoinRequest, setHasPendingJoinRequest] = useState(false);
+
+  // Add this import at the top to get the current user ID from auth state
+  const { user: currentUser } = useAuth();
+
   // Fetch projects on component mount
   useEffect(() => {
     const loadProjects = async () => {
@@ -60,10 +85,23 @@ const ProjectCollaboration = () => {
         
         // Fetch user's projects separately
         const userProjectsData = await fetchUserProjects();
-        setUserProjects(userProjectsData);
+        
+        // Fetch full details for user's projects to get member info
+        const detailedUserProjects = [];
+        for (const project of userProjectsData) {
+          try {
+            const projectDetails = await fetchProjectById(project.id);
+            detailedUserProjects.push(projectDetails);
+          } catch (error) {
+            console.error(`Error fetching details for project ${project.id}:`, error);
+            detailedUserProjects.push(project);
+          }
+        }
+        
+        setUserProjects(detailedUserProjects);
 
         // Extract workspaces from user projects
-        const extractedWorkspaces = userProjectsData
+        const extractedWorkspaces = detailedUserProjects
           .filter(project => project.workspace_slug)
           .map(project => ({
             id: project.id,
@@ -85,6 +123,143 @@ const ProjectCollaboration = () => {
     
     loadProjects();
   }, []);
+
+  // Fetch user's join requests
+  useEffect(() => {
+    if (activeTab === 'request-status') {
+      const fetchJoinRequests = async () => {
+        setLoading(true);
+        try {
+          // Fetch user's join requests (outgoing)
+          const userRequests = await fetchUserJoinRequests();
+          setUserJoinRequests(userRequests);
+          
+          // Find projects where user is admin
+          const adminProjectsList = userProjects.filter(project => 
+            project.creator && project.creator.id === localStorage.getItem('user_id')
+          );
+          
+          setAdminProjects(adminProjectsList);
+          
+          // Fetch incoming join requests for admin projects
+          const incomingRequests = [];
+          for (const project of adminProjectsList) {
+            try {
+              const projectRequests = await fetchProjectJoinRequests(project.id);
+              incomingRequests.push(...projectRequests.map(req => ({
+                ...req,
+                project_data: project
+              })));
+            } catch (error) {
+              console.error(`Error fetching requests for project ${project.id}:`, error);
+            }
+          }
+          
+          setReceivedJoinRequests(incomingRequests);
+        } catch (error) {
+          console.error('Error fetching join requests:', error);
+          toast.error('Failed to load join requests');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchJoinRequests();
+    }
+  }, [activeTab, userProjects]);
+
+  // Define refreshJoinRequestData with useCallback to prevent dependency issues
+  const refreshJoinRequestData = useCallback(async () => {
+    if (loading) return;
+    
+    setLoading(true);
+    try {
+      // Fetch user's join requests (outgoing)
+      const userRequests = await fetchUserJoinRequests();
+      setUserJoinRequests(userRequests);
+      
+      // Get the current user ID
+      const currentUserId = currentUser?.id || localStorage.getItem('user_id');
+      console.log("CURRENT USER ID:", currentUserId);
+      
+      // IMPORTANT: Log all projects to debug creator identification
+      console.log("ALL USER PROJECTS:", userProjects.map(p => ({
+        id: p.id,
+        title: p.title,
+        creatorId: p.creator?.id,
+        creatorName: p.creator?.username
+      })));
+      
+      // Find projects where the current user is the creator
+      const createdProjects = [];
+      for (const project of userProjects) {
+        const projectCreatorId = project.creator?.id;
+        console.log(`Checking project ${project.id} (${project.title}) - Creator: ${projectCreatorId}, Current: ${currentUserId}`);
+        
+        if (projectCreatorId === currentUserId) {
+          console.log(`✅ User is creator of project: ${project.title}`);
+          createdProjects.push(project);
+        } else {
+          console.log(`❌ User is NOT creator of project: ${project.title}`);
+        }
+      }
+      
+      console.log("CREATED PROJECTS:", createdProjects.map(p => p.title));
+      setAdminProjects(createdProjects);
+      
+      // Directly fetch project requests without filtering
+      try {
+        let allIncomingRequests = [];
+        
+        for (const project of createdProjects) {
+          console.log(`🔍 Fetching requests for project ${project.id} (${project.title})`);
+          
+          // Make direct API call to fetch join requests for this project
+          try {
+            const projectRequests = await fetchProjectJoinRequests(project.id);
+            console.log(`📨 Received ${projectRequests.length} requests for project ${project.title}`);
+            
+            if (projectRequests.length > 0) {
+              allIncomingRequests = [
+                ...allIncomingRequests,
+                ...projectRequests.map(req => ({
+                  ...req,
+                  project_data: project
+                }))
+              ];
+            }
+          } catch (reqError) {
+            console.error(`Error fetching requests for project ${project.id}:`, reqError);
+          }
+        }
+        
+        console.log("TOTAL INCOMING REQUESTS:", allIncomingRequests.length);
+        console.log("REQUEST DETAILS:", allIncomingRequests);
+        
+        // Update received join requests
+        setReceivedJoinRequests(allIncomingRequests);
+      } catch (error) {
+        console.error('Error fetching join requests:', error);
+      }
+    } catch (error) {
+      console.error('Error refreshing join requests:', error);
+      toast.error('Failed to load join requests');
+    } finally {
+      setLoading(false);
+    }
+  }, [userProjects, loading, currentUser]);
+
+  // Update the useEffect for request-status tab
+  // Remove the old useEffect that has activeTab and userProjects dependencies
+  // and replace with this
+  useEffect(() => {
+    if (activeTab === 'request-status') {
+      // Only load join request data if we have user projects data
+      if (userProjects.length > 0) {
+        refreshJoinRequestData();
+      }
+    }
+  }, [activeTab, userProjects.length]); // Only depend on length to avoid excessive rerenders
 
   const tabs = [
     { id: 'projects', label: 'Projects' },
@@ -189,8 +364,26 @@ const ProjectCollaboration = () => {
       setCurrentProject(projectDetails);
       
       // Check if the current user is the creator of the project
-      const userCreatedProject = userProjects.some(p => p.id === project.id);
+      const creatorId = projectDetails.creator?.id || null;
+      const currentUserId = currentUser?.id || localStorage.getItem('user_id');
+      const userCreatedProject = (creatorId === currentUserId);
+      
+      console.log("Project creator ID:", creatorId);
+      console.log("Current user ID:", currentUserId);
+      console.log("User created project:", userCreatedProject);
+      
       setIsCurrentUserProject(userCreatedProject);
+      
+      // Check if the user has already requested to join this project
+      try {
+        const userRequests = await fetchUserJoinRequests();
+        const hasExistingRequest = userRequests.some(
+          req => req.project === project.id && req.status === 'pending'
+        );
+        setHasPendingJoinRequest(hasExistingRequest);
+      } catch (error) {
+        console.error('Error checking join requests:', error);
+      }
       
       setShowProjectDetails(true);
     } catch (error) {
@@ -209,6 +402,100 @@ const ProjectCollaboration = () => {
   const openWorkspace = (workspaceSlug) => {
     // Navigate to workspace using the slug
     navigate(`/workspace/${workspaceSlug}`);
+  };
+
+  // Handle join request form change
+  const handleJoinRequestInputChange = (e) => {
+    const { name, value } = e.target;
+    setJoinRequestFormData({
+      ...joinRequestFormData,
+      [name]: value
+    });
+  };
+  
+  // Handle skills change for join request form
+  const handleJoinRequestSkillsChange = (newSkills) => {
+    setJoinRequestFormData({
+      ...joinRequestFormData,
+      skills: newSkills
+    });
+  };
+  
+  // Submit join request
+  const submitJoinRequest = async (e) => {
+    e.preventDefault();
+    
+    if (!currentProject) {
+      toast.error('No project selected for collaboration request');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const response = await createJoinRequest(currentProject.id, joinRequestFormData);
+      
+      toast.success('Collaboration request submitted successfully!');
+      setShowJoinRequestForm(false);
+      setJoinRequestFormData({
+        message: '',
+        skills: [],
+        expertise: '',
+        motivation: ''
+      });
+      
+      // Update user join requests
+      setUserJoinRequests(prev => [...prev, response]);
+      
+      // Set the hasPendingJoinRequest flag to true
+      setHasPendingJoinRequest(true);
+      
+      // Refresh join request data
+      refreshJoinRequestData();
+    } catch (error) {
+      console.error('Error submitting join request:', error);
+      toast.error(error.detail || 'Failed to submit collaboration request');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Handle request status update (accept/reject)
+  const handleRequestStatusUpdate = async (requestId, newStatus) => {
+    setLoading(true);
+    try {
+      await updateJoinRequestStatus(requestId, newStatus);
+      
+      // Update received join requests list
+      setReceivedJoinRequests(prev => 
+        prev.map(req => 
+          req.id === requestId 
+            ? { ...req, status: newStatus } 
+            : req
+        )
+      );
+      
+      // Also refresh the data to ensure everything is in sync
+      await refreshJoinRequestData();
+      
+      toast.success(`Request ${newStatus === 'accepted' ? 'accepted' : 'rejected'} successfully`);
+    } catch (error) {
+      console.error('Error updating request status:', error);
+      toast.error('Failed to update request status');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Request to collaborate
+  const requestCollaboration = (project) => {
+    setCurrentProject(project);
+    setShowJoinRequestForm(true);
+    setJoinRequestFormData({
+      message: '',
+      skills: [],
+      expertise: '',
+      motivation: ''
+    });
   };
 
   // Render project details view
@@ -288,14 +575,20 @@ const ProjectCollaboration = () => {
                 </button>
               )}
               
-              {!isCurrentUserProject && currentProject.open_for_collaboration && (
+              {!isCurrentUserProject && currentProject.open_for_collaboration && !hasPendingJoinRequest && (
                 <button
-                  // onClick={() => requestCollaboration(currentProject.id)} - We'll implement this later
+                  onClick={() => requestCollaboration(currentProject)}
                   className="w-full py-3 px-4 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center justify-center space-x-2 transition-colors"
                 >
                   <span>Request to Collaborate</span>
                   <UserGroupIcon className="w-4 h-4" />
                 </button>
+              )}
+
+              {!isCurrentUserProject && currentProject.open_for_collaboration && hasPendingJoinRequest && (
+                <div className="w-full py-3 px-4 bg-yellow-600/40 text-yellow-300 rounded-lg flex items-center justify-center space-x-2">
+                  <span>Request Pending</span>
+                </div>
               )}
 
               {!isCurrentUserProject && !currentProject.open_for_collaboration && (
@@ -366,6 +659,105 @@ const ProjectCollaboration = () => {
             </div>
           </div>
         </div>
+
+        {/* Join Request Form Modal */}
+        {showJoinRequestForm && (
+          <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
+            <div className="bg-slate-800 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+              <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                <h3 className="text-xl font-semibold text-slate-100">Request to Collaborate</h3>
+                <button 
+                  onClick={() => setShowJoinRequestForm(false)}
+                  className="p-1 rounded-full hover:bg-slate-700"
+                >
+                  <XMarkIcon className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+              
+              <form onSubmit={submitJoinRequest} className="p-6 space-y-6">
+                <div>
+                  <p className="text-slate-300 mb-4">
+                    You're requesting to join <span className="font-medium text-indigo-400">{currentProject.title}</span>
+                  </p>
+                </div>
+                
+                <div>
+                  <label htmlFor="motivation" className="block text-sm font-medium text-slate-300 mb-1">
+                    Why do you want to join this project? <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="motivation"
+                    name="motivation"
+                    value={joinRequestFormData.motivation}
+                    onChange={handleJoinRequestInputChange}
+                    required
+                    rows="3"
+                    placeholder="Explain why you're interested in this project"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  ></textarea>
+                </div>
+                
+                <div>
+                  <label htmlFor="expertise" className="block text-sm font-medium text-slate-300 mb-1">
+                    What expertise can you bring? <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    id="expertise"
+                    name="expertise"
+                    value={joinRequestFormData.expertise}
+                    onChange={handleJoinRequestInputChange}
+                    required
+                    rows="3"
+                    placeholder="Describe your relevant experience and skills"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  ></textarea>
+                </div>
+                
+                <div>
+                  <label htmlFor="skills" className="block text-sm font-medium text-slate-300 mb-1">
+                    Relevant Skills
+                  </label>
+                  <SkillsInput
+                    selectedSkills={joinRequestFormData.skills}
+                    onSkillsChange={handleJoinRequestSkillsChange}
+                  />
+                </div>
+                
+                <div>
+                  <label htmlFor="message" className="block text-sm font-medium text-slate-300 mb-1">
+                    Additional Message
+                  </label>
+                  <textarea
+                    id="message"
+                    name="message"
+                    value={joinRequestFormData.message}
+                    onChange={handleJoinRequestInputChange}
+                    rows="2"
+                    placeholder="Any additional information you'd like to share"
+                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  ></textarea>
+                </div>
+                
+                <div className="flex justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowJoinRequestForm(false)}
+                    className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    disabled={loading}
+                  >
+                    {loading ? 'Submitting...' : 'Submit Request'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -636,7 +1028,7 @@ const ProjectCollaboration = () => {
                       </div>
                       
                       <div className="divide-y divide-slate-700">
-                        {projects.map(project => (
+                {projects.map(project => (
                           <div 
                             key={project.id} 
                             className="grid grid-cols-12 p-4 hover:bg-slate-700/30 transition-colors"
@@ -687,57 +1079,57 @@ const ProjectCollaboration = () => {
                     {userProjects.length > 0 ? (
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
                         {userProjects.map(project => (
-                          <div
-                            key={project.id}
-                            className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
-                            onClick={() => viewProjectDetails(project)}
-                          >
-                            {project.project_image && (
-                              <div className="aspect-video w-full overflow-hidden">
-                                <img 
-                                  src={project.project_image} 
-                                  alt={project.title} 
-                                  className="w-full h-full object-cover"
-                                />
-                              </div>
-                            )}
-                            <div className="p-5">
-                              <h3 className="text-lg font-semibold text-slate-200 mb-2">{project.title}</h3>
-                              <p className="text-slate-400 text-sm mb-3">{project.short_description}</p>
-                              <div className="flex flex-wrap gap-2 mb-4">
-                                {project.skills && project.skills.slice(0, 3).map((skill, index) => (
-                                  <span 
-                                    key={index} 
-                                    className="bg-indigo-900/30 text-indigo-300 text-xs px-2 py-1 rounded"
-                                  >
-                                    {skill}
-                                  </span>
-                                ))}
-                                {project.skills && project.skills.length > 3 && (
-                                  <span className="bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded">
-                                    +{project.skills.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-slate-500">
-                                  {new Date(project.created_at).toLocaleDateString()}
-                                </span>
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    viewProjectDetails(project);
-                                  }}
-                                  className="text-indigo-400 text-sm font-medium hover:text-indigo-300 flex items-center"
-                                >
-                                  View Details
-                                  <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
+                  <div
+                    key={project.id}
+                    className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
+                    onClick={() => viewProjectDetails(project)}
+                  >
+                    {project.project_image && (
+                      <div className="aspect-video w-full overflow-hidden">
+                        <img 
+                          src={project.project_image} 
+                          alt={project.title} 
+                          className="w-full h-full object-cover"
+                        />
                       </div>
+                    )}
+                    <div className="p-5">
+                      <h3 className="text-lg font-semibold text-slate-200 mb-2">{project.title}</h3>
+                      <p className="text-slate-400 text-sm mb-3">{project.short_description}</p>
+                      <div className="flex flex-wrap gap-2 mb-4">
+                        {project.skills && project.skills.slice(0, 3).map((skill, index) => (
+                          <span 
+                            key={index} 
+                            className="bg-indigo-900/30 text-indigo-300 text-xs px-2 py-1 rounded"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {project.skills && project.skills.length > 3 && (
+                          <span className="bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded">
+                            +{project.skills.length - 3} more
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">
+                          {new Date(project.created_at).toLocaleDateString()}
+                        </span>
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            viewProjectDetails(project);
+                          }}
+                          className="text-indigo-400 text-sm font-medium hover:text-indigo-300 flex items-center"
+                        >
+                          View Details
+                          <ArrowTopRightOnSquareIcon className="w-4 h-4 ml-1" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
                     ) : (
                       <div className="text-center text-slate-400 py-8">
                         <p>You haven't created any projects yet.</p>
@@ -747,7 +1139,7 @@ const ProjectCollaboration = () => {
                         >
                           Create Your First Project
                         </button>
-                      </div>
+              </div>
                     )}
                   </div>
                 )}
@@ -808,11 +1200,194 @@ const ProjectCollaboration = () => {
 
         {/* Request Status Tab */}
         {!loading && activeTab === 'request-status' && (
-          <div className="text-slate-300 text-center py-8">
-            <p>Join request status feature coming soon!</p>
-            <p className="text-sm text-slate-400 mt-2">
-              This will show your pending, accepted, and rejected project join requests.
-            </p>
+          <div className="space-y-8">
+            {loading ? (
+              <div className="flex justify-center py-12">
+                <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+              </div>
+            ) : (
+              <>
+                {/* Requests Sent */}
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 mb-4">Your Collaboration Requests</h2>
+                  
+                  {userJoinRequests.length > 0 ? (
+                    <div className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-hidden">
+                      <div className="grid grid-cols-12 bg-slate-800 p-4 border-b border-slate-700 text-sm font-medium text-slate-300">
+                        <div className="col-span-3">Project</div>
+                        <div className="col-span-3">Requested On</div>
+                        <div className="col-span-3">Status</div>
+                        <div className="col-span-3">Action</div>
+                      </div>
+                      
+                      <div className="divide-y divide-slate-700">
+                        {userJoinRequests.map(request => (
+                          <div key={request.id} className="grid grid-cols-12 p-4 items-center">
+                            <div className="col-span-3 font-medium text-slate-200">{request.project_title}</div>
+                            <div className="col-span-3 text-slate-400 text-sm">
+                              {new Date(request.created_at).toLocaleDateString()}
+                            </div>
+                            <div className="col-span-3">
+                              {request.status === 'pending' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-900/30 text-yellow-400">
+                                  Pending
+                                </span>
+                              )}
+                              {request.status === 'accepted' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-900/30 text-green-400">
+                                  Accepted
+                                </span>
+                              )}
+                              {request.status === 'rejected' && (
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-900/30 text-red-400">
+                                  Declined
+                                </span>
+                              )}
+                            </div>
+                            <div className="col-span-3">
+                              <button
+                                onClick={() => {
+                                  // Find and view the project details
+                                  const project = projects.find(p => p.id === request.project);
+                                  if (project) {
+                                    viewProjectDetails(project);
+                                  }
+                                }}
+                                className="text-indigo-400 hover:text-indigo-300 text-sm"
+                              >
+                                View Project
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="bg-slate-800/30 rounded-xl border border-slate-700 p-8 text-center">
+                      <p className="text-slate-400">You haven't sent any collaboration requests yet.</p>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Requests Received (for project admins) */}
+                {adminProjects.length > 0 && (
+                  <div>
+                    <h2 className="text-xl font-bold text-slate-100 mb-4">Collaboration Requests Received</h2>
+                    
+                    {receivedJoinRequests.length > 0 ? (
+                      <div className="space-y-6">
+                        {receivedJoinRequests.map(request => (
+                          <div key={request.id} className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-hidden">
+                            <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                              <div>
+                                <span className="text-slate-400 text-sm">Request for</span>
+                                <h3 className="text-lg font-medium text-slate-200">{request.project_title}</h3>
+                              </div>
+                              <div>
+                                {request.status === 'pending' ? (
+                                  <div className="flex gap-2">
+                                    <button
+                                      onClick={() => handleRequestStatusUpdate(request.id, 'accepted')}
+                                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center"
+                                      disabled={loading}
+                                    >
+                                      <CheckIcon className="w-4 h-4 mr-1" />
+                                      Accept
+                                    </button>
+                                    <button
+                                      onClick={() => handleRequestStatusUpdate(request.id, 'rejected')}
+                                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center"
+                                      disabled={loading}
+                                    >
+                                      <XIcon className="w-4 h-4 mr-1" />
+                                      Decline
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    request.status === 'accepted' 
+                                      ? 'bg-green-900/30 text-green-400' 
+                                      : 'bg-red-900/30 text-red-400'
+                                  }`}>
+                                    {request.status === 'accepted' ? 'Accepted' : 'Declined'}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                            
+                            <div className="p-4 grid md:grid-cols-2 gap-4">
+                              <div>
+                                <div className="flex items-center mb-3">
+                                  <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                                    {request.user.username.charAt(0).toUpperCase()}
+                                  </div>
+                                  <div>
+                                    <div 
+                                      className="text-slate-200 font-medium cursor-pointer hover:text-indigo-400"
+                                      onClick={() => navigate(`/profile/${request.user.username}`)}
+                                    >
+                                      {request.user.full_name || request.user.username}
+                                    </div>
+                                    <div className="text-slate-500 text-sm">
+                                      Requested {new Date(request.created_at).toLocaleDateString()}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="mb-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Motivation</h4>
+                                  <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
+                                    {request.motivation || "No motivation provided"}
+                                  </p>
+                                </div>
+                              </div>
+                              
+                              <div>
+                                <div className="mb-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Expertise</h4>
+                                  <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
+                                    {request.expertise || "No expertise details provided"}
+                                  </p>
+                                </div>
+                                
+                                {request.skills && request.skills.length > 0 && (
+                                  <div className="mb-3">
+                                    <h4 className="text-sm font-medium text-slate-400 mb-1">Skills</h4>
+                                    <div className="flex flex-wrap gap-2">
+                                      {request.skills.map((skill, idx) => (
+                                        <span 
+                                          key={idx} 
+                                          className="bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded-full text-xs"
+                                        >
+                                          {skill}
+                                        </span>
+                                      ))}
+                                    </div>
+          </div>
+        )}
+                                
+                                {request.message && (
+                                  <div>
+                                    <h4 className="text-sm font-medium text-slate-400 mb-1">Additional Message</h4>
+                                    <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
+                                      {request.message}
+                                    </p>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="bg-slate-800/30 rounded-xl border border-slate-700 p-8 text-center">
+                        <p className="text-slate-400">You haven't received any collaboration requests yet.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         )}
       </div>

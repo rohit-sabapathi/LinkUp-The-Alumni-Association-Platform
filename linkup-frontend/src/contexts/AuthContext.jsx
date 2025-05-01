@@ -15,9 +15,45 @@ export const AuthProvider = ({ children }) => {
   const checkAuth = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (token) {
+      const refreshToken = localStorage.getItem('refreshToken');
+      
+      if (!token) {
+        console.log('No token found in localStorage');
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        // Try to get current user with existing token
         const response = await userAPI.getCurrentUser();
         setUser(response.data);
+        console.log('Authentication successful with existing token');
+      } catch (error) {
+        console.log('Token validation failed, attempting refresh:', error);
+        
+        // If the token is invalid and we have a refresh token, try to refresh
+        if (refreshToken) {
+          try {
+            const refreshResponse = await authAPI.refreshToken(refreshToken);
+            const { access } = refreshResponse.data;
+            
+            // Update the token
+            localStorage.setItem('token', access);
+            
+            // Try again with the new token
+            const userResponse = await userAPI.getCurrentUser();
+            setUser(userResponse.data);
+            console.log('Authentication successful after token refresh');
+          } catch (refreshError) {
+            console.error('Token refresh failed:', refreshError);
+            localStorage.removeItem('token');
+            localStorage.removeItem('refreshToken');
+          }
+        } else {
+          // No refresh token available
+          localStorage.removeItem('token');
+          localStorage.removeItem('refreshToken');
+        }
       }
     } catch (error) {
       console.error('Auth check failed:', error);

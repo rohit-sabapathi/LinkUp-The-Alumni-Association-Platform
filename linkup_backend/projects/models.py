@@ -125,6 +125,9 @@ class JoinRequest(models.Model):
         related_name='project_requests'
     )
     message = models.TextField(blank=True, null=True)
+    skills = models.JSONField(default=list, help_text="Skills relevant to this project")
+    expertise = models.TextField(blank=True, null=True, help_text="Detailed expertise description")
+    motivation = models.TextField(blank=True, null=True, help_text="Motivation for joining the project")
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

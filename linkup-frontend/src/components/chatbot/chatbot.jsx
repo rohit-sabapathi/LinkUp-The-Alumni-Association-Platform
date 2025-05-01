@@ -5,7 +5,7 @@ import axios from 'axios';
 // Styled components for the chat bot
 const ChatBotContainer = styled.div.attrs(props => ({
   style: {
-    maxHeight: props.isOpen ? '500px' : '60px'
+    maxHeight: props.$isOpen ? '500px' : '60px'
   }
 }))`
   position: fixed;
@@ -27,14 +27,12 @@ const ChatBotContainer = styled.div.attrs(props => ({
   }
 `;
 
-const ChatHeader = styled.div.attrs(props => ({
-  'data-valid': props.isValid
-}))`
+const ChatHeader = styled.div`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 15px 20px;
-  background-color: ${props => props['data-valid'] ? ' #4a6cf7' : ' #e74c3c'};
+  background-color: ${props => props.$isValid ? ' #4a6cf7' : ' #e74c3c'};
   color: white;
   cursor: pointer;
   
@@ -54,7 +52,7 @@ const ChatHeader = styled.div.attrs(props => ({
       width: 8px;
       height: 8px;
       border-radius: 50%;
-      background-color: ${props => props['data-valid'] ? ' #2ecc71' : ' #e74c3c'};
+      background-color: ${props => props.$isValid ? ' #2ecc71' : ' #e74c3c'};
       margin-right: 5px;
     }
   }
@@ -76,7 +74,7 @@ const Message = styled.div`
   word-wrap: break-word;
   font-color: #4a6cf7;
   
-  ${props => props.isUser ? `
+  ${props => props.$isUser ? `
     align-self: flex-end;
     background-color: #4a6cf7;
     color: white;
@@ -312,11 +310,11 @@ const ChatBot = ({ apiKey }) => {
   };
 
   return (
-    <ChatBotContainer isOpen={isOpen}>
-      <ChatHeader onClick={toggleChat} isValid={apiKeyValid}>
-        <h3>Chat Assistant</h3>
+    <ChatBotContainer $isOpen={isOpen}>
+      <ChatHeader onClick={toggleChat} $isValid={apiKeyValid}>
+        <h3>AI Assistant</h3>
         <div className="status-indicator">
-          {apiKeyValid ? 'Connected' : 'Disconnected'}
+          {isOpen ? 'Active' : 'Click to chat'}
         </div>
       </ChatHeader>
       
@@ -325,7 +323,7 @@ const ChatBot = ({ apiKey }) => {
           <ChatBody>
             <MessageContainer>
               {messages.map((message, index) => (
-                <Message key={index} isUser={message.isUser}>
+                <Message key={index} $isUser={message.isUser}>
                   {message.text}
                 </Message>
               ))}
