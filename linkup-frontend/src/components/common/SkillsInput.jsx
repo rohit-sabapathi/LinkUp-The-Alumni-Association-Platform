@@ -75,19 +75,17 @@ const SkillsInput = ({ selectedSkills, onSkillsChange }) => {
   return (
     <div className="relative">
       <div className="flex flex-wrap gap-2 p-2 bg-slate-800/50 rounded-lg border border-slate-700 min-h-[42px]">
-        {selectedSkills.map((skill) => (
-          <span
-            key={skill}
-            className="flex items-center gap-1 px-2 py-1 bg-indigo-900/50 text-indigo-300 rounded-md text-sm"
-          >
+        {selectedSkills.map((skill, index) => (
+          <div key={`skill-${index}-${skill}`} className="flex items-center bg-indigo-600/20 text-indigo-400 px-2 py-1 rounded-md mr-2 mb-2">
             {skill}
             <button
+              type="button"
               onClick={() => removeSkill(skill)}
-              className="hover:text-indigo-200"
+              className="ml-1 focus:outline-none"
             >
-              <XMarkIcon className="h-4 w-4" />
+              <XMarkIcon className="h-4 w-4 text-indigo-400 hover:text-indigo-300" />
             </button>
-          </span>
+          </div>
         ))}
         <input
           ref={inputRef}

@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     'events',
     'preferences',
     'donations',
+    'projects',
     'channels',
 ]
 

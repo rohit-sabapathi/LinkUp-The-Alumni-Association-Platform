@@ -20,7 +20,7 @@ const uiKitSettings = new UIKitSettingsBuilder()
   .setAuthKey(COMETCHAT_CONSTANTS.AUTH_KEY)
   .subscribePresenceForAllUsers()
   .build();
-
+function main() {
 CometChatUIKit.init(uiKitSettings)?.then(() => {
   setupLocalization();
 
@@ -50,3 +50,5 @@ CometChatUIKit.init(uiKitSettings)?.then(() => {
     }
   });
 });
+}
+export default main;

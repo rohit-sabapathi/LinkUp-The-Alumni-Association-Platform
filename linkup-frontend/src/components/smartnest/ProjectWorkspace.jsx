@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import {
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
@@ -10,38 +10,120 @@ import {
   PaperClipIcon,
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
+import { toast } from 'react-hot-toast';
 import CometChatApp from '../CometChat/App';
+import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
+
+// Custom ErrorBoundary to handle chat errors
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error) {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("Component error:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return this.props.fallback || (
+        <div className="flex justify-center items-center h-full p-6">
+          <div className="text-slate-400 text-center">
+            <p className="mb-2">Component error occurred</p>
+            <p className="text-sm">Try refreshing the page</p>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
 
 const ProjectWorkspace = () => {
-  const { workspaceId } = useParams();
+  const navigate = useNavigate();
+  const { workspaceSlug } = useParams();
   const [activeTab, setActiveTab] = useState('chat');
   const [workspace, setWorkspace] = useState(null);
+  const [project, setProject] = useState(null);
+  const [members, setMembers] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // Simulating workspace data fetch
+  // Fetch workspace data
   useEffect(() => {
-    // This would be replaced with an actual API call
-    const mockWorkspace = {
-      id: workspaceId,
-      title: 'Project Workspace',
-      description: 'Collaborative environment for team members',
-      createdAt: new Date().toISOString(),
-      members: [
-        { id: 1, name: 'John Doe', avatar: null, role: 'Admin' },
-        { id: 2, name: 'Jane Smith', avatar: null, role: 'Member' }
-      ]
+    const fetchWorkspaceData = async () => {
+      setLoading(true);
+      try {
+        // Fetch workspace by slug
+        const workspaceData = await fetchWorkspaceBySlug(workspaceSlug);
+        setWorkspace(workspaceData);
+        
+        // Get project ID - check multiple possible sources
+        const projectId = workspaceData.project_id || workspaceData.project;
+        
+        if (projectId) {
+          console.log('Found project ID:', projectId);
+          try {
+            const membersData = await fetchProjectMembers(projectId);
+            setMembers(membersData);
+            setProject(projectId);
+            setError(null);
+          } catch (memberError) {
+            console.error('Error fetching project members:', memberError);
+            // Continue showing the workspace even if members can't be loaded
+            setError(null);
+          }
+        } else {
+          console.error('Workspace data missing project ID:', workspaceData);
+          
+          // Try to extract project ID from the slug
+          const slugParts = workspaceSlug.split('-');
+          const idFragment = slugParts[slugParts.length - 1];
+          console.log('Attempting to use ID fragment from slug:', idFragment);
+          
+          // We'll continue showing the workspace even without members
+          setError(null);
+        }
+      } catch (error) {
+        console.error('Error fetching workspace:', error);
+        setError(error.detail || 'Failed to load workspace');
+        toast.error(error.detail || 'Failed to load workspace');
+      } finally {
+        setLoading(false);
+      }
     };
     
-    setTimeout(() => {
-      setWorkspace(mockWorkspace);
-      setLoading(false);
-    }, 500);
-  }, [workspaceId]);
+    if (workspaceSlug) {
+      fetchWorkspaceData();
+    }
+  }, [workspaceSlug]);
 
   if (loading) {
     return (
       <div className="min-h-screen bg-slate-900 text-white flex justify-center items-center">
-        <div className="text-slate-400">Loading workspace...</div>
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500 mb-4"></div>
+      </div>
+    );
+  }
+
+  if (error || !workspace) {
+    return (
+      <div className="min-h-screen bg-slate-900 text-white flex flex-col justify-center items-center">
+        <div className="text-slate-400 mb-4">
+          {error || "Workspace not found or you don't have access to it."}
+        </div>
+        <button 
+          onClick={() => navigate('/smartnest/projects')}
+          className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+        >
+          Back to Projects
+        </button>
       </div>
     );
   }
@@ -88,16 +170,32 @@ const ProjectWorkspace = () => {
           </div>
         </nav>
         
-        {/* User section */}
+        {/* User section - show first member if available or default user */}
         <div className="p-4 border-t border-slate-700 bg-slate-800/80">
           <div className="flex items-center">
-            <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
-              JD
-            </div>
-            <div>
-              <div className="text-slate-200 font-medium">John Doe</div>
-              <div className="text-slate-500 text-sm">Project Admin</div>
-            </div>
+            {members && members.length > 0 ? (
+              <>
+                <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                  {members[0].user.username.charAt(0).toUpperCase()}
+                </div>
+                <div>
+                  <div className="text-slate-200 font-medium">
+                    {members[0].user.full_name || members[0].user.username}
+                  </div>
+                  <div className="text-slate-500 text-sm capitalize">{members[0].role}</div>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                  U
+                </div>
+                <div>
+                  <div className="text-slate-200 font-medium">User</div>
+                  <div className="text-slate-500 text-sm">Project Member</div>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -126,7 +224,14 @@ const ProjectWorkspace = () => {
                   <h3 className="font-medium text-slate-300">Team Discussion</h3>
                 </div>
                 <div className="flex-1 overflow-y-auto">
-                  <CometChatApp />
+                  <ErrorBoundary fallback={<div className="flex justify-center items-center h-full p-6">
+                    <div className="text-slate-400 text-center">
+                      <p className="mb-2">Component error occurred</p>
+                      <p className="text-sm">Try refreshing the page</p>
+                    </div>
+                  </div>}>
+                    <CometChatApp />
+                  </ErrorBoundary>
                 </div>
               </div>
             </div>
@@ -154,11 +259,32 @@ const ProjectWorkspace = () => {
           
           {/* Team Tab */}
           {activeTab === 'team' && (
-            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] p-6 flex items-center justify-center">
-              <div className="text-slate-400 text-center">
-                <p className="mb-2">Team management functionality coming soon...</p>
-                <p className="text-sm max-w-md mx-auto">View, add, and manage team members for your project</p>
-              </div>
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 p-6">
+              <h3 className="text-lg font-semibold text-slate-200 mb-4">Team Members</h3>
+              {members && members.length > 0 ? (
+                <div className="space-y-4">
+                  {members.map(member => (
+                    <div key={member.id} className="flex items-center justify-between p-4 border border-slate-700 rounded-lg">
+                      <div className="flex items-center">
+                        <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                          {member.user.username.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <div className="text-slate-200 font-medium">{member.user.full_name || member.user.username}</div>
+                          <div className="text-slate-500 text-sm capitalize">{member.role}</div>
+                        </div>
+                      </div>
+                      <div className="text-xs text-slate-500">
+                        Joined {new Date(member.joined_at).toLocaleDateString()}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-slate-400 text-center py-8">
+                  <p>No team members found</p>
+                </div>
+              )}
             </div>
           )}
           

@@ -3,20 +3,23 @@ import styled from 'styled-components';
 import axios from 'axios';
 
 // Styled components for the chat bot
-const ChatBotContainer = styled.div`
+const ChatBotContainer = styled.div.attrs(props => ({
+  style: {
+    maxHeight: props.isOpen ? '500px' : '60px'
+  }
+}))`
   position: fixed;
   bottom: 20px;
   right: 20px;
-  z-index: 1000;
   display: flex;
   flex-direction: column;
   width: 350px;
-  max-height: ${props => props.isOpen ? '500px' : '60px'};
   background-color: #fff;
   border-radius: 10px;
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  transition: max-height 0.3s ease-in-out, box-shadow 0.3s ease;
   overflow: hidden;
+  transition: max-height 0.3s ease;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
   font-family: 'Arial', sans-serif;
   
   &:hover {
@@ -24,15 +27,16 @@ const ChatBotContainer = styled.div`
   }
 `;
 
-const ChatHeader = styled.div`
+const ChatHeader = styled.div.attrs(props => ({
+  'data-valid': props.isValid
+}))`
   display: flex;
   align-items: center;
   justify-content: space-between;
   padding: 15px 20px;
-  background-color: ${props => props.isValid ? ' #4a6cf7' : ' #e74c3c'};
+  background-color: ${props => props['data-valid'] ? ' #4a6cf7' : ' #e74c3c'};
   color: white;
   cursor: pointer;
-  transition: background-color 0.3s ease;
   
   h3 {
     margin: 0;
@@ -42,14 +46,17 @@ const ChatHeader = styled.div`
   .status-indicator {
     display: flex;
     align-items: center;
-  }
-  
-  .status-dot {
-    height: 8px;
-    width: 8px;
-    border-radius: 50%;
-    background-color: ${props => props.isValid ? ' #2ecc71' : ' #e74c3c'};
-    margin-right: 5px;
+    font-size: 12px;
+    
+    &:before {
+      content: '';
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: ${props => props['data-valid'] ? ' #2ecc71' : ' #e74c3c'};
+      margin-right: 5px;
+    }
   }
 `;
 
@@ -309,8 +316,7 @@ const ChatBot = ({ apiKey }) => {
       <ChatHeader onClick={toggleChat} isValid={apiKeyValid}>
         <h3>Chat Assistant</h3>
         <div className="status-indicator">
-          <div className="status-dot" title={apiKeyValid ? 'API Connected' : 'API Key Invalid'} />
-          <span>{isOpen ? '▼' : '▲'}</span>
+          {apiKeyValid ? 'Connected' : 'Disconnected'}
         </div>
       </ChatHeader>
       

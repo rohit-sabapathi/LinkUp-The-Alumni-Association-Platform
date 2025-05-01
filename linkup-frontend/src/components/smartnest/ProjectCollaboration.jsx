@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   PlusIcon, 
   FolderIcon, 
@@ -9,13 +9,25 @@ import {
   ArrowTopRightOnSquareIcon,
   ArrowLeftIcon
 } from '@heroicons/react/24/outline';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'react-hot-toast';
 import SkillsInput from '../common/SkillsInput';
+import { 
+  fetchProjects, 
+  createProject, 
+  fetchProjectById,
+  fetchUserProjects,
+  fetchWorkspaceBySlug
+} from '../../services/projectService';
 
 const ProjectCollaboration = () => {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('projects');
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [projects, setProjects] = useState([]);
+  const [userProjects, setUserProjects] = useState([]);
   const [workspaces, setWorkspaces] = useState([]);
+  const [loading, setLoading] = useState(false);
   const [currentProject, setCurrentProject] = useState(null);
   const [showProjectDetails, setShowProjectDetails] = useState(false);
 
@@ -31,6 +43,42 @@ const ProjectCollaboration = () => {
     githubLink: '',
     projectImage: null
   });
+
+  // Fetch projects on component mount
+  useEffect(() => {
+    const loadProjects = async () => {
+      setLoading(true);
+      try {
+        const projectsData = await fetchProjects();
+        setProjects(projectsData);
+        
+        // Fetch user's projects separately
+        const userProjectsData = await fetchUserProjects();
+        setUserProjects(userProjectsData);
+
+        // Extract workspaces from user projects
+        const extractedWorkspaces = userProjectsData
+          .filter(project => project.workspace_slug)
+          .map(project => ({
+            id: project.id,
+            title: project.title,
+            description: project.short_description,
+            slug: project.workspace_slug,
+            project_id: project.id,
+            created_at: project.created_at
+          }));
+        
+        setWorkspaces(extractedWorkspaces);
+      } catch (error) {
+        console.error('Error fetching projects:', error);
+        toast.error('Failed to load projects');
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    loadProjects();
+  }, []);
 
   const tabs = [
     { id: 'projects', label: 'Projects' },
@@ -70,49 +118,76 @@ const ProjectCollaboration = () => {
     }
   };
 
-  const handleSubmitProject = (e) => {
+  const handleSubmitProject = async (e) => {
     e.preventDefault();
     
-    // Create a new project
-    const newProject = {
-      id: Date.now().toString(),
-      ...projectForm,
-      projectImage: projectForm.projectImage ? URL.createObjectURL(projectForm.projectImage) : null,
-      createdAt: new Date().toISOString()
-    };
-    
-    // Add to projects list
-    setProjects([...projects, newProject]);
-    
-    // Create workspace for the project
-    const newWorkspace = {
-      id: `workspace-${newProject.id}`,
-      projectId: newProject.id,
-      title: newProject.title,
-      description: newProject.shortDescription
-    };
-    
-    // Add to workspaces list
-    setWorkspaces([...workspaces, newWorkspace]);
-    
-    // Reset form and hide it
-    setProjectForm({
-      title: '',
-      shortDescription: '',
-      detailedDescription: '',
-      projectType: '',
-      skills: [],
-      maxTeamMembers: 3,
-      openForCollaboration: true,
-      githubLink: '',
-      projectImage: null
-    });
-    setShowProjectForm(false);
+    try {
+      setLoading(true);
+      console.log('Submitting project form data:', projectForm);
+      const newProject = await createProject(projectForm);
+      console.log('Project created successfully:', newProject);
+      
+      // Update projects list
+      setProjects(prevProjects => [...prevProjects, newProject]);
+      setUserProjects(prevProjects => [...prevProjects, newProject]);
+      
+      // If workspace was created, update workspaces list
+      if (newProject.workspace_slug) {
+        const newWorkspace = {
+          id: newProject.id,
+          title: newProject.title,
+          description: newProject.short_description,
+          slug: newProject.workspace_slug,
+          project_id: newProject.id,
+          created_at: newProject.created_at
+        };
+        setWorkspaces(prevWorkspaces => [...prevWorkspaces, newWorkspace]);
+      }
+      
+      // Reset form and hide it
+      setProjectForm({
+        title: '',
+        shortDescription: '',
+        detailedDescription: '',
+        projectType: '',
+        skills: [],
+        maxTeamMembers: 3,
+        openForCollaboration: true,
+        githubLink: '',
+        projectImage: null
+      });
+      
+      setShowProjectForm(false);
+      toast.success('Project created successfully!');
+    } catch (error) {
+      console.error('Error creating project:', error);
+      toast.error(error.detail || 'Failed to create project');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const viewProjectDetails = (project) => {
-    setCurrentProject(project);
-    setShowProjectDetails(true);
+  const viewProjectDetails = async (project) => {
+    try {
+      setLoading(true);
+      // Check if project id exists before making the API call
+      if (!project || !project.id) {
+        console.error('Invalid project data:', project);
+        toast.error('Invalid project data');
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch full project details
+      const projectDetails = await fetchProjectById(project.id);
+      setCurrentProject(projectDetails);
+      setShowProjectDetails(true);
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+      toast.error('Failed to load project details');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const closeProjectDetails = () => {
@@ -120,10 +195,9 @@ const ProjectCollaboration = () => {
     setShowProjectDetails(false);
   };
   
-  const openWorkspace = (workspace) => {
-    // Open workspace in a new tab with a unique URL
-    const workspaceUrl = `/workspace/${workspace.id}`;
-    window.open(workspaceUrl, '_blank');
+  const openWorkspace = (workspaceSlug) => {
+    // Navigate to workspace using the slug
+    navigate(`/workspace/${workspaceSlug}`);
   };
 
   // Render project details view
@@ -144,10 +218,10 @@ const ProjectCollaboration = () => {
           <div className="grid md:grid-cols-3 gap-8">
             {/* Left column - Project image and basic info */}
             <div className="md:col-span-1 space-y-6">
-              {currentProject.projectImage ? (
+              {currentProject.project_image ? (
                 <div className="rounded-lg overflow-hidden border border-slate-700">
                   <img 
-                    src={currentProject.projectImage} 
+                    src={currentProject.project_image} 
                     alt={currentProject.title} 
                     className="w-full object-cover"
                   />
@@ -160,77 +234,76 @@ const ProjectCollaboration = () => {
               
               <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Project Type</h3>
-                <p className="text-indigo-400 text-md font-medium">{currentProject.projectType}</p>
+                <p className="text-indigo-400 text-md font-medium">{currentProject.project_type}</p>
               </div>
               
               <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Created On</h3>
-                <p className="text-slate-300">{new Date(currentProject.createdAt).toLocaleDateString()}</p>
+                <p className="text-slate-300">{new Date(currentProject.created_at).toLocaleDateString()}</p>
               </div>
               
               <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Max Team Members</h3>
-                <p className="text-slate-300">{currentProject.maxTeamMembers}</p>
+                <p className="text-slate-300">{currentProject.max_team_members}</p>
               </div>
               
-              {currentProject.githubLink && (
+              {currentProject.github_link && (
                 <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                   <h3 className="text-sm font-medium text-slate-400 mb-2">GitHub Repository</h3>
                   <a 
-                    href={currentProject.githubLink}
+                    href={currentProject.github_link}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-blue-400 hover:text-blue-300"
                   >
-                    {currentProject.githubLink}
+                    {currentProject.github_link}
                   </a>
                 </div>
               )}
               
               <div className="p-4 bg-slate-900/50 rounded-lg border border-slate-700">
                 <h3 className="text-sm font-medium text-slate-400 mb-2">Open for Collaboration</h3>
-                <p className="text-slate-300">{currentProject.openForCollaboration ? 'Yes' : 'No'}</p>
+                <p className="text-slate-300">{currentProject.open_for_collaboration ? 'Yes' : 'No'}</p>
               </div>
               
               {/* Workspace button */}
-              <button
-                onClick={() => {
-                  const workspace = workspaces.find(w => w.projectId === currentProject.id);
-                  if (workspace) openWorkspace(workspace);
-                }}
-                className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center space-x-2 transition-colors"
-              >
-                <span>Open Workspace</span>
-                <ArrowTopRightOnSquareIcon className="w-4 h-4" />
-              </button>
+              {currentProject.workspace && (
+                <button
+                  onClick={() => openWorkspace(currentProject.workspace.slug)}
+                  className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center justify-center space-x-2 transition-colors"
+                >
+                  <span>Open Workspace</span>
+                  <ArrowTopRightOnSquareIcon className="w-4 h-4" />
+                </button>
+              )}
             </div>
             
             {/* Right column - Project title and details */}
             <div className="md:col-span-2 space-y-6">
               <div>
                 <h2 className="text-2xl font-bold text-slate-100 mb-2">{currentProject.title}</h2>
-                <p className="text-slate-400">{currentProject.shortDescription}</p>
+                <p className="text-slate-400">{currentProject.short_description}</p>
               </div>
               
               <div className="border-t border-slate-700 pt-4">
                 <h3 className="text-lg font-semibold text-slate-200 mb-3">Detailed Description</h3>
                 <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700">
-                  <p className="text-slate-300 whitespace-pre-line">{currentProject.detailedDescription}</p>
+                  <p className="text-slate-300 whitespace-pre-line">{currentProject.detailed_description}</p>
                 </div>
               </div>
               
               <div className="border-t border-slate-700 pt-4">
                 <h3 className="text-lg font-semibold text-slate-200 mb-3">Skills Required</h3>
                 <div className="flex flex-wrap gap-2">
-                  {currentProject.skills.map(skill => (
+                  {currentProject.skills && currentProject.skills.map((skill, index) => (
                     <span 
-                      key={skill} 
+                      key={index} 
                       className="bg-indigo-900/30 text-indigo-300 px-3 py-1.5 rounded-full text-sm"
                     >
                       {skill}
                     </span>
                   ))}
-                  {currentProject.skills.length === 0 && (
+                  {(!currentProject.skills || currentProject.skills.length === 0) && (
                     <p className="text-slate-500">No specific skills listed</p>
                   )}
                 </div>
@@ -238,8 +311,29 @@ const ProjectCollaboration = () => {
               
               <div className="border-t border-slate-700 pt-4">
                 <h3 className="text-lg font-semibold text-slate-200 mb-3">Team</h3>
-                <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700 flex items-center justify-center h-40">
-                  <p className="text-slate-400">No team members yet</p>
+                <div className="bg-slate-900/30 rounded-lg p-4 border border-slate-700">
+                  {currentProject.members && currentProject.members.length > 0 ? (
+                    <div className="space-y-4">
+                      {currentProject.members.map(member => (
+                        <div key={member.id} className="flex items-center justify-between">
+                          <div className="flex items-center">
+                            <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                              {member.user.username.charAt(0).toUpperCase()}
+                            </div>
+                            <div>
+                              <div className="text-slate-200 font-medium">{member.user.full_name || member.user.username}</div>
+                              <div className="text-slate-500 text-sm capitalize">{member.role}</div>
+                            </div>
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            Joined {new Date(member.joined_at).toLocaleDateString()}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-slate-400 text-center">No team members yet</p>
+                  )}
                 </div>
               </div>
             </div>
@@ -275,8 +369,15 @@ const ProjectCollaboration = () => {
 
       {/* Tab Content */}
       <div className="bg-slate-800/50 rounded-xl p-8">
-        {/* Projects Tab */}
-        {activeTab === 'projects' && (
+        {/* Loading state */}
+        {loading && (
+          <div className="flex justify-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+          </div>
+        )}
+
+        {/* All Projects Tab */}
+        {!loading && activeTab === 'projects' && (
           <div className="space-y-8">
             {!showProjectForm && (
               <div className="flex justify-center gap-4">
@@ -286,10 +387,6 @@ const ProjectCollaboration = () => {
                 >
                   <PlusIcon className="w-5 h-5 mr-2" />
                   Create New Project
-                </button>
-                <button className="flex items-center px-6 py-3 bg-slate-700 hover:bg-slate-600 text-white rounded-lg transition-colors duration-200">
-                  <FolderIcon className="w-5 h-5 mr-2" />
-                  View Projects
                 </button>
               </div>
             )}
@@ -470,8 +567,9 @@ const ProjectCollaboration = () => {
                     <button
                       type="submit"
                       className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      disabled={loading}
                     >
-                      Create Project
+                      {loading ? 'Creating...' : 'Create Project'}
                     </button>
                   </div>
                 </form>
@@ -479,7 +577,7 @@ const ProjectCollaboration = () => {
             )}
 
             {/* Projects List */}
-            {projects.length > 0 && (
+            {!loading && projects.length > 0 && (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8">
                 {projects.map(project => (
                   <div
@@ -487,10 +585,10 @@ const ProjectCollaboration = () => {
                     className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
                     onClick={() => viewProjectDetails(project)}
                   >
-                    {project.projectImage && (
+                    {project.project_image && (
                       <div className="aspect-video w-full overflow-hidden">
                         <img 
-                          src={project.projectImage} 
+                          src={project.project_image} 
                           alt={project.title} 
                           className="w-full h-full object-cover"
                         />
@@ -498,17 +596,17 @@ const ProjectCollaboration = () => {
                     )}
                     <div className="p-5">
                       <h3 className="text-lg font-semibold text-slate-200 mb-2">{project.title}</h3>
-                      <p className="text-slate-400 text-sm mb-3">{project.shortDescription}</p>
+                      <p className="text-slate-400 text-sm mb-3">{project.short_description}</p>
                       <div className="flex flex-wrap gap-2 mb-4">
-                        {project.skills.slice(0, 3).map(skill => (
+                        {project.skills && project.skills.slice(0, 3).map((skill, index) => (
                           <span 
-                            key={skill} 
+                            key={index} 
                             className="bg-indigo-900/30 text-indigo-300 text-xs px-2 py-1 rounded"
                           >
                             {skill}
                           </span>
                         ))}
-                        {project.skills.length > 3 && (
+                        {project.skills && project.skills.length > 3 && (
                           <span className="bg-slate-800 text-slate-400 text-xs px-2 py-1 rounded">
                             +{project.skills.length - 3} more
                           </span>
@@ -516,7 +614,7 @@ const ProjectCollaboration = () => {
                       </div>
                       <div className="flex justify-between items-center">
                         <span className="text-xs text-slate-500">
-                          {new Date(project.createdAt).toLocaleDateString()}
+                          {new Date(project.created_at).toLocaleDateString()}
                         </span>
                         <button
                           onClick={(e) => {
@@ -535,29 +633,32 @@ const ProjectCollaboration = () => {
               </div>
             )}
             
-            {projects.length === 0 && !showProjectForm && (
+            {!loading && projects.length === 0 && !showProjectForm && (
               <div className="text-center text-slate-400">
-                Select an action to get started with projects
+                No projects available. Create one to get started!
               </div>
             )}
           </div>
         )}
 
         {/* Workspaces Tab */}
-        {activeTab === 'workspaces' && (
+        {!loading && activeTab === 'workspaces' && (
           <div>
             {workspaces.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {workspaces.map(workspace => (
                   <div
                     key={workspace.id}
-                    className="bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-indigo-500 cursor-pointer transition-all duration-200"
+                    className="bg-slate-900/50 p-5 rounded-xl border border-slate-700 hover:border-slate-500 transition-all duration-200 cursor-pointer"
                   >
                     <h3 className="text-lg font-semibold text-slate-200 mb-2">{workspace.title}</h3>
                     <p className="text-slate-400 text-sm mb-4">{workspace.description}</p>
-                    <div className="flex justify-end">
-                      <button 
-                        onClick={() => openWorkspace(workspace)}
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-slate-500">
+                        {new Date(workspace.created_at).toLocaleDateString()}
+                      </span>
+                      <button
+                        onClick={() => openWorkspace(workspace.slug)}
                         className="text-indigo-400 text-sm font-medium hover:text-indigo-300 flex items-center"
                       >
                         Open Workspace
@@ -569,16 +670,28 @@ const ProjectCollaboration = () => {
               </div>
             ) : (
               <div className="text-center text-slate-400">
-                <p>No workspaces available. Create a project to get started.</p>
+                <p>You don't have any workspaces yet. Create a project to get started!</p>
+                <button 
+                  onClick={() => {
+                    setActiveTab('projects');
+                    setShowProjectForm(true);
+                  }}
+                  className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                >
+                  Create Project
+                </button>
               </div>
             )}
           </div>
         )}
 
         {/* Request Status Tab */}
-        {activeTab === 'request-status' && (
-          <div>
-            <p className="text-slate-300">Request Status tab content coming soon...</p>
+        {!loading && activeTab === 'request-status' && (
+          <div className="text-slate-300 text-center py-8">
+            <p>Join request status feature coming soon!</p>
+            <p className="text-sm text-slate-400 mt-2">
+              This will show your pending, accepted, and rejected project join requests.
+            </p>
           </div>
         )}
       </div>

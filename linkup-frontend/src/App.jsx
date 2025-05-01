@@ -169,7 +169,7 @@ const AppContent = () => {
           
           {/* Workspace route - notice no container/padding applied */}
           <Route
-            path="/workspace/:workspaceId"
+            path="/workspace/:workspaceSlug"
             element={
               <ProtectedRoute>
                 <ProjectWorkspace />
