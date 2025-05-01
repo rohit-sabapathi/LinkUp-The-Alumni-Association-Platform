@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { UserGroupIcon, AcademicCapIcon } from '@heroicons/react/24/outline';
-
+import ChatBot from '../chatbot';
+const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const SmartNest = () => {
   return (
     <div className="max-w-4xl mx-auto">
@@ -34,8 +35,10 @@ const SmartNest = () => {
             <p className="text-slate-400">Share expertise and guide others through mentorship programs</p>
           </div>
         </Link>
+        <ChatBot apiKey={groqApiKey} />
       </div>
     </div>
+    
   );
 };
 
