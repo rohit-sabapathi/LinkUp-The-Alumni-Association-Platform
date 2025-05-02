@@ -5,7 +5,8 @@ from .views import (
     JoinRequestViewSet, 
     WorkspaceDetailView,
     UserProjectsView,
-    UserJoinRequestsView
+    UserJoinRequestsView,
+    UserWorkspacesView
 )
 
 router = DefaultRouter()
@@ -16,5 +17,6 @@ urlpatterns = [
     path('', include(router.urls)),
     path('user/projects/', UserProjectsView.as_view(), name='user-projects'),
     path('user/join-requests/', UserJoinRequestsView.as_view(), name='user-join-requests'),
+    path('user/workspaces/', UserWorkspacesView.as_view(), name='user-workspaces'),
     path('workspace/<slug:slug>/', WorkspaceDetailView.as_view(), name='workspace-detail'),
 ] 

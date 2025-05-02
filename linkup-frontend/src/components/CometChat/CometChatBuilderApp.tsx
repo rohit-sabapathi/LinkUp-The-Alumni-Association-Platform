@@ -33,7 +33,7 @@ function CometChatBuilderApp({ user, group }: CometChatHomeProps) {
   useEffect(() => {
     const loginUser = async () => {
       try {
-        const user = await CometChatUIKit.login('cometchat-uid-2');
+        const user = await CometChatUIKit.login('cometchat-uid-1');
         setLoggedInUser(user);
       } catch (err) {
         console.error('Login failed:', err);

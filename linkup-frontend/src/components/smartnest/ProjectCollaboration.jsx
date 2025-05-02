@@ -24,7 +24,8 @@ import {
   createJoinRequest,
   fetchUserJoinRequests,
   fetchProjectJoinRequests,
-  updateJoinRequestStatus
+  updateJoinRequestStatus,
+  fetchUserWorkspaces
 } from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -76,17 +77,21 @@ const ProjectCollaboration = () => {
 
   // Fetch projects on component mount
   useEffect(() => {
-    const loadProjects = async () => {
+    const loadData = async () => {
       setLoading(true);
       try {
-        // Fetch all projects for the "View Projects" tab
+        // Fetch all projects for reference
         const projectsData = await fetchProjects();
         setProjects(projectsData);
         
-        // Fetch user's projects separately
+        // Fetch user's projects (both created and participated)
         const userProjectsData = await fetchUserProjects();
+        console.log('User projects data:', userProjectsData);
         
-        // Fetch full details for user's projects to get member info
+        // Get the current user ID
+        const currentUserId = currentUser?.id || localStorage.getItem('user_id');
+        
+        // Process projects to include both created and member projects
         const detailedUserProjects = [];
         for (const project of userProjectsData) {
           try {
@@ -98,21 +103,39 @@ const ProjectCollaboration = () => {
           }
         }
         
+        console.log('Detailed user projects:', detailedUserProjects);
         setUserProjects(detailedUserProjects);
 
-        // Extract workspaces from user projects
-        const extractedWorkspaces = detailedUserProjects
-          .filter(project => project.workspace_slug)
-          .map(project => ({
-            id: project.id,
-            title: project.title,
-            description: project.short_description,
-            slug: project.workspace_slug,
-            project_id: project.id,
-            created_at: project.created_at
-          }));
+        // Extract workspaces directly from the projects
+        const extractedWorkspaces = [];
         
+        for (const project of detailedUserProjects) {
+          console.log(`Checking project ${project.id} for workspace:`, project);
+          
+          // Check if the user is a creator or member of this project
+          const isCreator = project.creator && project.creator.id === currentUserId;
+          const isMember = project.members && project.members.some(member => 
+            member.user.id === currentUserId
+          );
+          
+          // Only include workspaces for projects where user is creator or member
+          if ((isCreator || isMember) && project.workspace) {
+            const workspace = {
+              id: project.workspace.id,
+              title: project.workspace.title || project.title,
+              description: project.workspace.description || project.short_description,
+              slug: project.workspace.slug,
+              project_id: project.id,
+              created_at: project.workspace.created_at || project.created_at
+            };
+            console.log('Extracted workspace:', workspace);
+            extractedWorkspaces.push(workspace);
+          }
+        }
+        
+        console.log('Final workspaces:', extractedWorkspaces);
         setWorkspaces(extractedWorkspaces);
+        
       } catch (error) {
         console.error('Error fetching projects:', error);
         toast.error('Failed to load projects');
@@ -121,8 +144,8 @@ const ProjectCollaboration = () => {
       }
     };
     
-    loadProjects();
-  }, []);
+    loadData();
+  }, [currentUser]);
 
   // Fetch user's join requests
   useEffect(() => {
@@ -310,18 +333,30 @@ const ProjectCollaboration = () => {
       
       // Update projects list
       setProjects(prevProjects => [...prevProjects, newProject]);
-      setUserProjects(prevProjects => [...prevProjects, newProject]);
       
-      // If workspace was created, update workspaces list
-      if (newProject.workspace_slug) {
+      // Fetch the full project details to ensure we have the workspace
+      let fullProjectDetails = newProject;
+      try {
+        fullProjectDetails = await fetchProjectById(newProject.id);
+        console.log('Fetched full project details:', fullProjectDetails);
+      } catch (error) {
+        console.error('Error fetching full project details:', error);
+      }
+      
+      // Add the new project to user projects
+      setUserProjects(prevProjects => [...prevProjects, fullProjectDetails]);
+      
+      // If workspace exists on the project, add it to workspaces
+      if (fullProjectDetails.workspace) {
         const newWorkspace = {
-          id: newProject.id,
-          title: newProject.title,
-          description: newProject.short_description,
-          slug: newProject.workspace_slug,
-          project_id: newProject.id,
-          created_at: newProject.created_at
+          id: fullProjectDetails.workspace.id,
+          title: fullProjectDetails.workspace.title || fullProjectDetails.title,
+          description: fullProjectDetails.workspace.description || fullProjectDetails.short_description,
+          slug: fullProjectDetails.workspace.slug,
+          project_id: fullProjectDetails.id,
+          created_at: fullProjectDetails.workspace.created_at || fullProjectDetails.created_at
         };
+        console.log('Adding new workspace to list:', newWorkspace);
         setWorkspaces(prevWorkspaces => [...prevWorkspaces, newWorkspace]);
       }
       
@@ -363,16 +398,24 @@ const ProjectCollaboration = () => {
       const projectDetails = await fetchProjectById(project.id);
       setCurrentProject(projectDetails);
       
+      // Get the current user ID
+      const currentUserId = currentUser?.id || localStorage.getItem('user_id');
+      
       // Check if the current user is the creator of the project
       const creatorId = projectDetails.creator?.id || null;
-      const currentUserId = currentUser?.id || localStorage.getItem('user_id');
       const userCreatedProject = (creatorId === currentUserId);
+      
+      // Check if the user is a member of the project
+      const isProjectMember = projectDetails.members && projectDetails.members.some(
+        member => member.user.id === currentUserId
+      );
       
       console.log("Project creator ID:", creatorId);
       console.log("Current user ID:", currentUserId);
       console.log("User created project:", userCreatedProject);
+      console.log("User is member:", isProjectMember);
       
-      setIsCurrentUserProject(userCreatedProject);
+      setIsCurrentUserProject(userCreatedProject || isProjectMember);
       
       // Check if the user has already requested to join this project
       try {
@@ -1073,7 +1116,7 @@ const ProjectCollaboration = () => {
                   </div>
                 )}
                 
-                {/* Cards View Mode - Show user's projects */}
+                {/* Cards View Mode - Show user's created projects */}
                 {projectViewMode === 'cards' && (
                   <div>
                     {userProjects.length > 0 ? (
@@ -1157,7 +1200,7 @@ const ProjectCollaboration = () => {
         {/* Workspaces Tab */}
         {!loading && activeTab === 'workspaces' && (
           <div>
-            {workspaces.length > 0 ? (
+            {workspaces && workspaces.length > 0 ? (
               <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {workspaces.map(workspace => (
                   <div

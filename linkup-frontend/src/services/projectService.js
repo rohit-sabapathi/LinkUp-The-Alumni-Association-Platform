@@ -218,4 +218,16 @@ export const updateJoinRequestStatus = async (requestId, status) => {
     console.error('Error updating join request status:', error);
     throw error.response?.data || { detail: 'Failed to update join request status' };
   }
+};
+
+export const fetchUserWorkspaces = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/user/workspaces/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user workspaces:', error);
+    throw error.response?.data || { detail: 'Failed to fetch user workspaces' };
+  }
 }; 

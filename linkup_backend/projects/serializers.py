@@ -25,30 +25,38 @@ class ProjectMemberSerializer(serializers.ModelSerializer):
 class WorkspaceSerializer(serializers.ModelSerializer):
     class Meta:
         model = Workspace
-        fields = ['id', 'title', 'description', 'slug', 'created_at']
+        fields = ['id', 'title', 'description', 'slug', 'created_at', 'project']
         read_only_fields = ['id', 'slug', 'created_at']
 
 class ProjectListSerializer(serializers.ModelSerializer):
     creator = UserMiniSerializer(read_only=True)
     member_count = serializers.SerializerMethodField()
     workspace_slug = serializers.SerializerMethodField()
+    workspace = WorkspaceSerializer(read_only=True)
     
     class Meta:
         model = Project
         fields = [
             'id', 'title', 'short_description', 'project_type',
             'skills', 'open_for_collaboration', 'project_image',
-            'created_at', 'creator', 'member_count', 'workspace_slug'
+            'created_at', 'creator', 'member_count', 'workspace_slug',
+            'workspace'
         ]
-        read_only_fields = ['id', 'created_at', 'creator']
+        read_only_fields = ['id', 'created_at', 'creator', 'workspace']
     
     def get_member_count(self, obj):
         return obj.members.count()
     
     def get_workspace_slug(self, obj):
         try:
-            return obj.workspace.slug
+            workspace = obj.workspace
+            if workspace:
+                print(f"Found workspace for project {obj.id}: {workspace.slug}")
+                return workspace.slug
+            print(f"No workspace found for project {obj.id}")
+            return None
         except Workspace.DoesNotExist:
+            print(f"Workspace does not exist for project {obj.id}")
             return None
 
 class ProjectDetailSerializer(serializers.ModelSerializer):
@@ -71,34 +79,39 @@ class ProjectDetailSerializer(serializers.ModelSerializer):
         return obj.members.count()
 
 class ProjectCreateSerializer(serializers.ModelSerializer):
+    creator = UserMiniSerializer(read_only=True)
+    
     class Meta:
         model = Project
         fields = [
-            'title', 'short_description', 'detailed_description',
+            'id', 'title', 'short_description', 'detailed_description',
             'project_type', 'skills', 'max_team_members', 'open_for_collaboration',
-            'github_link', 'project_image'
+            'github_link', 'project_image', 'creator', 'created_at'
         ]
+        read_only_fields = ['id', 'created_at', 'creator']
     
     def create(self, validated_data):
-        user = self.context['request'].user
-        project = Project.objects.create(creator=user, **validated_data)
+        # Make sure we don't have creator in validated_data
+        if 'creator' in validated_data:
+            validated_data.pop('creator')
         
-        # Automatically add creator as admin member
-        ProjectMember.objects.create(
-            project=project,
-            user=user,
-            role='admin'
-        )
+        # Get the user from context
+        user = self.context['request'].user
+        
+        # Create project with user as creator
+        project = Project(creator=user, **validated_data)
+        project.save()
         
         # Create workspace for the project
-        workspace_title = validated_data.get('title', f"Workspace for {project.id}")
-        workspace_description = validated_data.get('short_description', None)
-        
-        Workspace.objects.create(
-            project=project,
-            title=workspace_title,
-            description=workspace_description
-        )
+        try:
+            workspace = Workspace.objects.create(
+                project=project,
+                title=f"Workspace for {project.title}",
+                description=project.short_description
+            )
+            print(f"Created workspace with slug: {workspace.slug}")
+        except Exception as e:
+            print(f"Error creating workspace: {str(e)}")
         
         return project
 

@@ -19,13 +19,14 @@ from .serializers import (
 
 class ProjectViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for project management
+    ViewSet for managing projects
     """
     queryset = Project.objects.all()
     filter_backends = [filters.SearchFilter, filters.OrderingFilter]
     search_fields = ['title', 'short_description', 'detailed_description', 'project_type', 'skills']
     ordering_fields = ['created_at', 'title']
     ordering = ['-created_at']
+    permission_classes = [permissions.IsAuthenticated]
     
     def get_serializer_class(self):
         if self.action == 'create':
@@ -34,44 +35,58 @@ class ProjectViewSet(viewsets.ModelViewSet):
             return ProjectDetailSerializer
         return ProjectListSerializer
     
-    def get_permissions(self):
-        if self.action in ['update', 'partial_update', 'destroy']:
-            return [permissions.IsAuthenticated(), IsProjectAdmin()]
-        elif self.action in ['create', 'join_request']:
-            return [permissions.IsAuthenticated()]
-        return [permissions.IsAuthenticated()]
-    
     def get_queryset(self):
         queryset = super().get_queryset()
         
-        # Filter based on query parameters
-        project_type = self.request.query_params.get('project_type')
+        # Add filters based on query parameters
+        project_type = self.request.query_params.get('project_type', None)
+        skills = self.request.query_params.get('skills', None)
+        user_projects = self.request.query_params.get('user_projects', None)
+        open_only = self.request.query_params.get('open_only', None)
+        search = self.request.query_params.get('search', None)
+        
         if project_type:
             queryset = queryset.filter(project_type=project_type)
-            
-        skills = self.request.query_params.get('skills')
+        
         if skills:
             skill_list = skills.split(',')
-            for skill in skill_list:
-                queryset = queryset.filter(skills__contains=[skill.strip()])
+            queryset = queryset.filter(skills__overlap=skill_list)
         
-        # Filter for user's projects if requested
-        user_projects = self.request.query_params.get('user_projects')
-        if user_projects == 'true':
-            queryset = queryset.filter(
-                Q(creator=self.request.user) | 
-                Q(members__user=self.request.user)
-            ).distinct()
+        if user_projects:
+            queryset = queryset.filter(creator=self.request.user)
         
-        # Filter for open collaborations if requested
-        open_only = self.request.query_params.get('open_only')
-        if open_only == 'true':
+        if open_only:
             queryset = queryset.filter(open_for_collaboration=True)
-            
+        
+        if search:
+            queryset = queryset.filter(
+                Q(title__icontains=search) |
+                Q(short_description__icontains=search) |
+                Q(detailed_description__icontains=search)
+            )
+        
         return queryset
     
     def perform_create(self, serializer):
-        serializer.save()
+        print("Creating new project...")
+        # Pass user directly instead of as a parameter to avoid double creator issue
+        user = self.request.user
+        project = serializer.save()
+        
+        # Automatically add creator as admin member
+        try:
+            ProjectMember.objects.create(
+                project=project,
+                user=user,
+                role='admin'
+            )
+            print(f"Added user {user.username} as admin to project {project.id}")
+        except Exception as e:
+            print(f"Error adding creator as admin: {str(e)}")
+        
+        print(f"Project created: {project.id}")
+        
+        return project
     
     @action(detail=True, methods=['post'])
     def join_request(self, request, pk=None):
@@ -173,12 +188,15 @@ class ProjectViewSet(viewsets.ModelViewSet):
         Get the workspace associated with a project
         """
         project = self.get_object()
+        print(f"Fetching workspace for project {project.id}")
         
         try:
             workspace = project.workspace
+            print(f"Found workspace: {workspace.slug}")
             serializer = WorkspaceSerializer(workspace)
             return Response(serializer.data)
         except Workspace.DoesNotExist:
+            print(f"No workspace found for project {project.id}")
             return Response(
                 {"detail": "No workspace found for this project"}, 
                 status=status.HTTP_404_NOT_FOUND
@@ -343,4 +361,28 @@ class UserJoinRequestsView(generics.ListAPIView):
             return Response(
                 {"detail": "Failed to fetch join requests"},
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            ) 
+            )
+
+
+class UserWorkspacesView(generics.ListAPIView):
+    """
+    View for listing workspaces for projects where the user is either a creator or member
+    """
+    serializer_class = WorkspaceSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        user = self.request.user
+        # Get projects where user is either creator or member
+        user_projects = Project.objects.filter(
+            Q(creator=user) | Q(members__user=user)
+        ).distinct()
+        
+        # Get workspaces for these projects
+        workspaces = Workspace.objects.filter(project__in=user_projects)
+        
+        print(f"User {user.username} (ID: {user.id}) has {workspaces.count()} workspaces")
+        for workspace in workspaces:
+            print(f"Workspace: {workspace.title} (Slug: {workspace.slug})")
+        
+        return workspaces 
