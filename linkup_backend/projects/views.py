@@ -4,11 +4,12 @@ from rest_framework.decorators import action
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework import serializers
+from datetime import datetime
 
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
-    Task, TaskAssignment, TaskComment
+    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask
 )
 from .serializers import (
     ProjectListSerializer, 
@@ -36,7 +37,11 @@ from .serializers import (
     TaskAssignmentSerializer,
     TaskAssignmentCreateSerializer,
     TaskCommentSerializer,
-    TaskCommentCreateSerializer
+    TaskCommentCreateSerializer,
+    ProgressLogSerializer,
+    ProgressLogCreateSerializer,
+    ProgressLogListSerializer,
+    ProgressLogTaskSerializer
 )
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -497,6 +502,10 @@ class IsWorkspaceMember(permissions.BasePermission):
                 workspace = obj.task.column.board.workspace
             elif isinstance(obj, TaskComment):
                 workspace = obj.task.column.board.workspace
+            elif isinstance(obj, ProgressLog):
+                workspace = obj.workspace
+            elif isinstance(obj, ProgressLogTask):
+                workspace = obj.progress_log.workspace
             else:
                 return False
                 
@@ -1065,3 +1074,151 @@ class WorkspaceBoardView(generics.RetrieveAPIView):
                 Column.objects.create(board=board, **col)
         
         return board 
+
+# Add these new views after the TaskComment related views
+
+class ProgressLogViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing progress logs
+    """
+    queryset = ProgressLog.objects.all()
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_serializer_class(self):
+        if self.action == 'create' or self.action == 'update' or self.action == 'partial_update':
+            return ProgressLogCreateSerializer
+        elif self.action == 'list':
+            return ProgressLogListSerializer
+        return ProgressLogSerializer
+    
+    def get_queryset(self):
+        # First, filter logs from workspaces the user has access to
+        user_projects = Project.objects.filter(
+            Q(creator=self.request.user) | 
+            Q(members__user=self.request.user)
+        ).distinct()
+        
+        user_workspaces = Workspace.objects.filter(project__in=user_projects)
+        
+        # Start with logs from workspaces the user has access to
+        queryset = self.queryset.filter(workspace__in=user_workspaces)
+        
+        # Apply additional filters
+        workspace_id = self.request.query_params.get('workspace')
+        user_id = self.request.query_params.get('user')
+        week = self.request.query_params.get('week')
+        
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+            
+        if user_id:
+            # If requesting other users' logs, ensure the user has access to those logs
+            if str(user_id) != str(self.request.user.id):
+                # Only include logs for other users if they're in the same workspace
+                queryset = queryset.filter(user_id=user_id)
+            else:
+                # For the current user, show all their logs in their workspaces
+                queryset = queryset.filter(user_id=self.request.user.id)
+        
+        if week:
+            queryset = queryset.filter(week_number=week)
+        
+        return queryset
+    
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        
+        # Get the workspace and check if user has access
+        workspace = instance.workspace
+        project = workspace.project
+        
+        # Check if user is either the creator of the project, a member of the project,
+        # or the author of the progress log
+        if not (
+            project.creator == request.user or 
+            ProjectMember.objects.filter(project=project, user=request.user).exists() or
+            instance.user == request.user
+        ):
+            return Response(
+                {"detail": "You do not have permission to view this progress log."},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        serializer = self.get_serializer(instance)
+        return Response(serializer.data)
+    
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
+
+class WorkspaceProgressLogsView(generics.ListAPIView):
+    """
+    View for listing progress logs for a workspace by its slug
+    """
+    serializer_class = ProgressLogListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        workspace_slug = self.kwargs.get('workspace_slug')
+        workspace = get_object_or_404(Workspace, slug=workspace_slug)
+        
+        # Check if user has access to the workspace
+        project = workspace.project
+        if not (project.creator == self.request.user or 
+                ProjectMember.objects.filter(project=project, user=self.request.user).exists()):
+            raise permissions.PermissionDenied("You don't have access to this workspace")
+        
+        # Get week parameter if provided
+        week = self.request.query_params.get('week')
+        user_id = self.request.query_params.get('user')
+        
+        queryset = ProgressLog.objects.filter(workspace=workspace)
+        
+        if week:
+            queryset = queryset.filter(week_number=week)
+            
+        if user_id:
+            queryset = queryset.filter(user_id=user_id)
+        
+        return queryset
+
+class UserProgressLogsView(generics.ListAPIView):
+    """
+    View for listing a user's progress logs across all workspaces
+    """
+    serializer_class = ProgressLogListSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        return ProgressLog.objects.filter(user=self.request.user)
+
+class CurrentWeekProgressLogView(generics.RetrieveAPIView):
+    """
+    View for getting the progress log for the current week for a workspace
+    If it doesn't exist, returns 404
+    """
+    serializer_class = ProgressLogSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        workspace_slug = self.kwargs.get('workspace_slug')
+        workspace = get_object_or_404(Workspace, slug=workspace_slug)
+        
+        # Check if user has access to the workspace
+        project = workspace.project
+        if not (project.creator == self.request.user or 
+                ProjectMember.objects.filter(project=project, user=self.request.user).exists()):
+            raise permissions.PermissionDenied("You don't have access to this workspace")
+        
+        # Calculate the current week number
+        today = datetime.now().date()
+        current_week = today.isocalendar()[1]  # ISO week number
+        
+        # Try to find progress log for current user and current week
+        progress_log = get_object_or_404(
+            ProgressLog, 
+            workspace=workspace,
+            user=self.request.user,
+            week_number=current_week
+        )
+        
+        return progress_log 

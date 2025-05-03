@@ -15,7 +15,12 @@ from .views import (
     ColumnViewSet,
     TaskViewSet,
     TaskCommentViewSet,
-    WorkspaceBoardView
+    WorkspaceBoardView,
+    # Progress Log views
+    ProgressLogViewSet,
+    WorkspaceProgressLogsView,
+    UserProgressLogsView,
+    CurrentWeekProgressLogView
 )
 
 router = DefaultRouter()
@@ -27,6 +32,8 @@ router.register(r'boards', BoardViewSet, basename='board')
 router.register(r'columns', ColumnViewSet, basename='column')
 router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'task-comments', TaskCommentViewSet, basename='task-comment')
+# Register Progress Log endpoints
+router.register(r'progress-logs', ProgressLogViewSet, basename='progress-log')
 router.register(r'', ProjectViewSet, basename='project')
 
 urlpatterns = [
@@ -34,8 +41,12 @@ urlpatterns = [
     path('user/projects/', UserProjectsView.as_view(), name='user-projects'),
     path('user/join-requests/', UserJoinRequestsView.as_view(), name='user-join-requests'),
     path('user/workspaces/', UserWorkspacesView.as_view(), name='user-workspaces'),
+    path('user/progress-logs/', UserProgressLogsView.as_view(), name='user-progress-logs'),
     path('workspace/<slug:slug>/', WorkspaceDetailView.as_view(), name='workspace-detail'),
     path('workspace/<slug:workspace_slug>/resources/', WorkspaceResourcesView.as_view(), name='workspace-resources'),
     # Kanban Board routes
     path('workspace/<slug:workspace_slug>/board/', WorkspaceBoardView.as_view(), name='workspace-board'),
+    # Progress Log routes
+    path('workspace/<slug:workspace_slug>/progress-logs/', WorkspaceProgressLogsView.as_view(), name='workspace-progress-logs'),
+    path('workspace/<slug:workspace_slug>/current-week-log/', CurrentWeekProgressLogView.as_view(), name='current-week-log'),
 ] 

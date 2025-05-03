@@ -1,0 +1,39 @@
+/* Custom theme overrides for the Gantt chart */
+.wx-willow-theme {
+    /* Customize task colors */
+    --wx-gantt-task-color: #3983eb;
+    --wx-gantt-task-font-color: #fff;
+    --wx-gantt-task-fill-color: #1f6bd9;
+    --wx-gantt-task-border-color: #1f6bd9;
+
+    /* Grid styling */
+    --wx-grid-header-font-color: #333;
+    --wx-grid-body-font-color: #333;
+    --wx-grid-body-row-border: 1px solid #e5e7eb;
+
+    /* Timeline styling */
+    --wx-timescale-font-color: #333;
+    --wx-gantt-holiday-background: #f3f4f6;
+    --wx-gantt-holiday-color: #6b7280;
+
+    /* Progress bar styling */
+    --wx-gantt-progress-border-color: #1f6bd9;
+
+    /* Link styling */
+    --wx-gantt-link-color: #9fa1ae;
+    --wx-gantt-link-marker-color: #9fa1ae;
+
+    /* Selection styling */
+    --wx-gantt-select-color: #eaedf5;
+}
+
+/* Ensure the Gantt container takes full height */
+.wx-gantt {
+    height: 100% !important;
+    background-color: white;
+}
+
+/* Ensure proper scrolling */
+.wx-gantt-body {
+    overflow: auto;
+} 

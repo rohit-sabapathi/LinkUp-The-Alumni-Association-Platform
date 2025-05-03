@@ -9,12 +9,15 @@ import {
   Cog6ToothIcon,
   ArrowLeftIcon,
   PaperClipIcon,
-  DocumentTextIcon
+  DocumentTextIcon,
+  CalendarIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
 import ResourceSharing from '../resources/ResourceSharing';
 import KanbanBoard from '../kanban/KanbanBoard';
+import ProgressLogs from '../progress/ProgressLogs';
+import ProjectGanttChart from '../gantt/ProjectGanttChart';
 import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
 
 // Custom ErrorBoundary to handle chat errors
@@ -134,6 +137,8 @@ const ProjectWorkspace = () => {
   const tabs = [
     { id: 'chat', label: 'Team Chat', icon: ChatBubbleLeftRightIcon },
     { id: 'tracking', label: 'Project Tracking', icon: ChartBarIcon },
+    { id: 'progress', label: 'Progress Logs', icon: DocumentTextIcon },
+    { id: 'timeline', label: 'Timeline View', icon: CalendarIcon },
     { id: 'sharing', label: 'Resource Sharing', icon: ShareIcon },
     { id: 'team', label: 'Team Members', icon: UserGroupIcon },
     { id: 'settings', label: 'Workspace Settings', icon: Cog6ToothIcon }
@@ -256,6 +261,38 @@ const ProjectWorkspace = () => {
                 </div>
               }>
                 <KanbanBoard workspaceSlug={workspaceSlug} />
+              </ErrorBoundary>
+            </div>
+          )}
+          
+          {/* Progress Logs Tab */}
+          {activeTab === 'progress' && (
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] overflow-auto">
+              <ErrorBoundary fallback={
+                <div className="flex justify-center items-center h-full p-6">
+                  <div className="text-slate-400 text-center">
+                    <p className="mb-2">Error loading progress logs</p>
+                    <p className="text-sm">Try refreshing the page</p>
+                  </div>
+                </div>
+              }>
+                <ProgressLogs workspaceSlug={workspaceSlug} />
+              </ErrorBoundary>
+            </div>
+          )}
+          
+          {/* Timeline Tab (Gantt Chart) */}
+          {activeTab === 'timeline' && (
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] overflow-hidden">
+              <ErrorBoundary fallback={
+                <div className="flex justify-center items-center h-full p-6">
+                  <div className="text-slate-400 text-center">
+                    <p className="mb-2">Error loading timeline view</p>
+                    <p className="text-sm">Try refreshing the page</p>
+                  </div>
+                </div>
+              }>
+                <ProjectGanttChart workspaceSlug={workspaceSlug} />
               </ErrorBoundary>
             </div>
           )}

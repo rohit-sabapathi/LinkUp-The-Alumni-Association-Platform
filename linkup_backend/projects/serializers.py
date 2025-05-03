@@ -3,7 +3,7 @@ from django.contrib.auth import get_user_model
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
-    Task, TaskAssignment, TaskComment
+    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask
 )
 
 User = get_user_model()
@@ -441,15 +441,17 @@ class TaskAssignmentCreateSerializer(serializers.ModelSerializer):
         fields = ['task', 'assignee_id']
     
     def validate_assignee_id(self, value):
+        User = get_user_model()
         try:
             user = User.objects.get(id=value)
             # Check if user is a member of the project
             task = self.initial_data.get('task')
-            if task:
-                task_obj = Task.objects.get(id=task)
-                project = task_obj.column.board.workspace.project
-                if not ProjectMember.objects.filter(project=project, user=user).exists():
-                    raise serializers.ValidationError("User is not a member of this project")
+            task_obj = Task.objects.get(id=task)
+            project = task_obj.column.board.workspace.project
+            
+            if not ProjectMember.objects.filter(project=project, user=user).exists() and project.creator != user:
+                raise serializers.ValidationError("User is not a member of this project")
+            
             return user
         except User.DoesNotExist:
             raise serializers.ValidationError("User does not exist")
@@ -457,11 +459,15 @@ class TaskAssignmentCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         assignee = validated_data.pop('assignee_id')
         assigned_by = self.context['request'].user
-        return TaskAssignment.objects.create(
+        
+        # Create assignment with assignee
+        assignment = TaskAssignment(
             assignee=assignee,
             assigned_by=assigned_by,
             **validated_data
         )
+        assignment.save()
+        return assignment
 
 class TaskCommentCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -470,4 +476,174 @@ class TaskCommentCreateSerializer(serializers.ModelSerializer):
     
     def create(self, validated_data):
         author = self.context['request'].user
-        return TaskComment.objects.create(author=author, **validated_data) 
+        comment = TaskComment(
+            author=author,
+            **validated_data
+        )
+        comment.save()
+        return comment
+
+# Progress Log Serializers
+class ProgressLogTaskSerializer(serializers.ModelSerializer):
+    task_title = serializers.CharField(source='task.title', read_only=True)
+    
+    class Meta:
+        model = ProgressLogTask
+        fields = [
+            'id', 'task', 'task_title', 'status', 
+            'contribution', 'hours_spent'
+        ]
+        read_only_fields = ['id']
+
+class ProgressLogSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+    tasks = ProgressLogTaskSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ProgressLog
+        fields = [
+            'id', 'workspace', 'user', 'week_number', 
+            'week_start_date', 'summary', 'blockers', 
+            'goals_next_week', 'created_at', 'updated_at', 'tasks'
+        ]
+        read_only_fields = ['id', 'user', 'created_at', 'updated_at']
+
+class ProgressLogCreateSerializer(serializers.ModelSerializer):
+    task_updates = ProgressLogTaskSerializer(many=True, required=False)
+    
+    class Meta:
+        model = ProgressLog
+        fields = [
+            'workspace', 'week_number', 'week_start_date', 
+            'summary', 'blockers', 'goals_next_week', 'task_updates'
+        ]
+    
+    def validate_workspace(self, value):
+        # Check if user is a member of the project
+        user = self.context['request'].user
+        
+        # If value is a string (slug), try to get the workspace by slug
+        if isinstance(value, str):
+            try:
+                # Try to parse as UUID first
+                import uuid
+                try:
+                    uuid_obj = uuid.UUID(value)
+                    workspace = Workspace.objects.get(id=uuid_obj)
+                except (ValueError, Workspace.DoesNotExist):
+                    # If not a valid UUID, try to get by slug
+                    workspace = Workspace.objects.get(slug=value)
+                value = workspace
+            except Workspace.DoesNotExist:
+                raise serializers.ValidationError(f"Workspace with ID or slug '{value}' does not exist")
+        
+        project = value.project
+        
+        if not (ProjectMember.objects.filter(project=project, user=user).exists() or project.creator == user):
+            raise serializers.ValidationError("You don't have access to this workspace")
+        
+        # For create operation, check if a progress log already exists for this user, workspace, and week
+        # This prevents the UNIQUE constraint error and provides a better error message
+        if self.instance is None:  # This is a create operation
+            week_number = self.initial_data.get('week_number')
+            if week_number:
+                existing_log = ProgressLog.objects.filter(
+                    workspace=value,
+                    user=user,
+                    week_number=week_number
+                ).first()
+                
+                if existing_log:
+                    raise serializers.ValidationError(
+                        f"You already have a progress log for week {week_number}. Please update the existing log instead."
+                    )
+        
+        return value
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        task_updates = validated_data.pop('task_updates', [])
+        
+        # Make sure user is not already in validated_data
+        if 'user' in validated_data:
+            validated_data.pop('user')
+        
+        # Create the progress log
+        try:
+            progress_log = ProgressLog.objects.create(
+                user=user,
+                **validated_data
+            )
+            
+            # Create task updates
+            for task_data in task_updates:
+                try:
+                    ProgressLogTask.objects.create(
+                        progress_log=progress_log,
+                        **task_data
+                    )
+                except Exception as e:
+                    print(f"Error creating task update: {str(e)}")
+                    # Continue with other task updates even if one fails
+            
+            return progress_log
+        except Exception as e:
+            error_message = str(e)
+            if "UNIQUE constraint failed" in error_message:
+                # Handle the uniqueness constraint error more gracefully
+                existing_log = ProgressLog.objects.filter(
+                    workspace=validated_data['workspace'],
+                    user=user,
+                    week_number=validated_data['week_number']
+                ).first()
+                
+                if existing_log:
+                    # If an existing log was found, return it instead of raising an error
+                    return existing_log
+            
+            # Re-raise the exception for other types of errors
+            raise
+    
+    def update(self, instance, validated_data):
+        task_updates = validated_data.pop('task_updates', None)
+        
+        # Make sure user is not in validated_data
+        if 'user' in validated_data:
+            validated_data.pop('user')
+        
+        # Update progress log fields
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        
+        # If task_updates provided, handle them
+        if task_updates is not None:
+            # Clear existing task updates and create new ones
+            instance.tasks.all().delete()
+            
+            for task_data in task_updates:
+                try:
+                    ProgressLogTask.objects.create(
+                        progress_log=instance,
+                        **task_data
+                    )
+                except Exception as e:
+                    print(f"Error creating task update during update: {str(e)}")
+                    # Continue with other task updates even if one fails
+        
+        return instance
+
+class ProgressLogListSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+    tasks_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ProgressLog
+        fields = [
+            'id', 'workspace', 'user', 'week_number', 
+            'week_start_date', 'created_at', 'tasks_count'
+        ]
+        read_only_fields = ['id', 'user', 'created_at']
+    
+    def get_tasks_count(self, obj):
+        return obj.tasks.count() 

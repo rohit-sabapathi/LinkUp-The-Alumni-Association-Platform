@@ -368,4 +368,71 @@ class TaskComment(models.Model):
         ordering = ['created_at']
     
     def __str__(self):
-        return f"Comment by {self.author.username} on {self.task.title}" 
+        return f"Comment by {self.author.username} on {self.task.title}"
+
+# Progress Log Models
+class ProgressLog(models.Model):
+    """
+    Model for weekly progress logs by project members
+    """
+    STATUS_CHOICES = (
+        ('completed', 'Completed'),
+        ('in_progress', 'In Progress'),
+        ('blocked', 'Blocked'),
+        ('not_started', 'Not Started'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='progress_logs'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='progress_logs'
+    )
+    week_number = models.PositiveIntegerField(help_text="Week number for this progress log")
+    week_start_date = models.DateField(help_text="Start date for the week")
+    
+    # Log content
+    summary = models.TextField(help_text="Summary of work done this week")
+    blockers = models.TextField(blank=True, null=True, help_text="Any blockers or challenges faced")
+    goals_next_week = models.TextField(blank=True, null=True, help_text="Goals for next week")
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-week_start_date', '-created_at']
+        unique_together = ('workspace', 'user', 'week_number')
+    
+    def __str__(self):
+        return f"Progress log by {self.user.username} - Week {self.week_number}"
+
+class ProgressLogTask(models.Model):
+    """
+    Model linking progress logs to specific tasks
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    progress_log = models.ForeignKey(
+        ProgressLog,
+        on_delete=models.CASCADE,
+        related_name='tasks'
+    )
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='progress_updates'
+    )
+    status = models.CharField(max_length=20, choices=ProgressLog.STATUS_CHOICES)
+    contribution = models.TextField(help_text="Work done on this specific task")
+    hours_spent = models.PositiveIntegerField(default=0, help_text="Hours spent on this task")
+    
+    class Meta:
+        unique_together = ('progress_log', 'task')
+    
+    def __str__(self):
+        return f"Task update for {self.task.title} in week {self.progress_log.week_number}" 
