@@ -20,11 +20,12 @@ const uiKitSettings = new UIKitSettingsBuilder()
   .setAuthKey(COMETCHAT_CONSTANTS.AUTH_KEY)
   .subscribePresenceForAllUsers()
   .build();
-function main() {
+
+  const Main = () => {
 CometChatUIKit.init(uiKitSettings)?.then(() => {
   setupLocalization();
 
-  const UID = "cometchat-uid-1";	 // Replace with your actual UID
+  const UID = "cometchat-uid-3"; // Replace with your actual UID
 
   CometChatUIKit.getLoggedinUser().then((user: CometChat.User | null) => {
     if (!user) {
@@ -50,5 +51,7 @@ CometChatUIKit.init(uiKitSettings)?.then(() => {
     }
   });
 });
-}
-export default main;
+
+  }
+
+  export default Main;
