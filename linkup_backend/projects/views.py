@@ -5,7 +5,11 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework import serializers
 
-from .models import Project, Workspace, ProjectMember, JoinRequest, ResourceCategory, Resource
+from .models import (
+    Project, Workspace, ProjectMember, JoinRequest, 
+    ResourceCategory, Resource, Board, Column, 
+    Task, TaskAssignment, TaskComment
+)
 from .serializers import (
     ProjectListSerializer, 
     ProjectDetailSerializer, 
@@ -19,7 +23,20 @@ from .serializers import (
     ResourceCategoryDetailSerializer,
     ResourceCategoryCreateSerializer,
     ResourceSerializer,
-    ResourceCreateSerializer
+    ResourceCreateSerializer,
+    # Kanban Board Serializers
+    BoardSerializer,
+    BoardDetailSerializer,
+    ColumnSerializer,
+    ColumnDetailSerializer,
+    TaskSerializer,
+    TaskDetailSerializer,
+    TaskCreateSerializer,
+    TaskMoveSerializer,
+    TaskAssignmentSerializer,
+    TaskAssignmentCreateSerializer,
+    TaskCommentSerializer,
+    TaskCommentCreateSerializer
 )
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -396,43 +413,100 @@ class IsWorkspaceMember(permissions.BasePermission):
     Permission to check if user is a member of the workspace's project
     """
     def has_permission(self, request, view):
+        # Special handling for task assignment action
+        if view.__class__.__name__ == 'TaskViewSet' and getattr(view, 'action', None) == 'assign':
+            # Skip the generic permission check for assign action
+            # We'll handle permissions in the method itself
+            return True
+            
         # For create methods, check if user is member of the workspace
         if request.method == 'POST':
-            workspace_id = request.data.get('workspace')
-            category_id = request.data.get('category')
-            
             try:
+                workspace_id = request.data.get('workspace')
+                category_id = request.data.get('category')
+                column_id = request.data.get('column')
+                board_id = request.data.get('board')
+                
+                # Skip any undefined values or invalid UUIDs
+                if workspace_id == 'undefined':
+                    workspace_id = None
+                if category_id == 'undefined':
+                    category_id = None
+                if column_id == 'undefined':
+                    column_id = None
+                if board_id == 'undefined':
+                    board_id = None
+                
+                # Try to get workspace information from whatever field is available
                 if workspace_id:
                     workspace = Workspace.objects.get(id=workspace_id)
                 elif category_id:
                     category = ResourceCategory.objects.get(id=category_id)
                     workspace = category.workspace
+                elif column_id:
+                    column = Column.objects.get(id=column_id)
+                    workspace = column.board.workspace
+                elif board_id:
+                    board = Board.objects.get(id=board_id)
+                    workspace = board.workspace
                 else:
-                    return False
+                    # For task creation always allow if we can't determine workspace
+                    # Column ID should be required for tasks, and we'll check that later
+                    if 'column' in request.data and view.__class__.__name__ == 'TaskViewSet':
+                        column_id = request.data.get('column')
+                        column = Column.objects.get(id=column_id)
+                        workspace = column.board.workspace
+                    else:
+                        return False
                     
                 return ProjectMember.objects.filter(
                     project=workspace.project,
                     user=request.user
                 ).exists() or workspace.project.creator == request.user
-            except (Workspace.DoesNotExist, ResourceCategory.DoesNotExist):
+            except (Workspace.DoesNotExist, ResourceCategory.DoesNotExist, Column.DoesNotExist, Board.DoesNotExist, ValueError, TypeError):
+                # If there's any error in finding the workspace, let the view handle it
+                if 'column' in request.data and view.__class__.__name__ == 'TaskViewSet':
+                    try:
+                        column_id = request.data.get('column')
+                        column = Column.objects.get(id=column_id)
+                        workspace = column.board.workspace
+                        return ProjectMember.objects.filter(
+                            project=workspace.project, 
+                            user=request.user
+                        ).exists() or workspace.project.creator == request.user
+                    except (Column.DoesNotExist, ValueError, TypeError):
+                        return False
                 return False
                 
         return True
     
     def has_object_permission(self, request, view, obj):
-        # Get the workspace - either directly or through the category
-        if isinstance(obj, ResourceCategory):
-            workspace = obj.workspace
-        elif isinstance(obj, Resource):
-            workspace = obj.category.workspace
-        else:
+        # Get the workspace - either directly or through related objects
+        try:
+            if isinstance(obj, (Workspace, ResourceCategory)):
+                workspace = getattr(obj, 'workspace', obj)
+            elif isinstance(obj, Resource):
+                workspace = obj.category.workspace
+            elif isinstance(obj, Board):
+                workspace = obj.workspace
+            elif isinstance(obj, Column):
+                workspace = obj.board.workspace
+            elif isinstance(obj, Task):
+                workspace = obj.column.board.workspace
+            elif isinstance(obj, TaskAssignment):
+                workspace = obj.task.column.board.workspace
+            elif isinstance(obj, TaskComment):
+                workspace = obj.task.column.board.workspace
+            else:
+                return False
+                
+            # Check if user is a member of the workspace's project
+            return ProjectMember.objects.filter(
+                project=workspace.project,
+                user=request.user
+            ).exists() or workspace.project.creator == request.user
+        except (AttributeError, Workspace.DoesNotExist):
             return False
-            
-        # Check if user is a member of the workspace's project
-        return ProjectMember.objects.filter(
-            project=workspace.project,
-            user=request.user
-        ).exists() or workspace.project.creator == request.user
 
 class ResourceCategoryViewSet(viewsets.ModelViewSet):
     """
@@ -538,4 +612,456 @@ class WorkspaceResourcesView(generics.ListAPIView):
            workspace.project.creator != self.request.user:
             return ResourceCategory.objects.none()
             
-        return ResourceCategory.objects.filter(workspace=workspace) 
+        return ResourceCategory.objects.filter(workspace=workspace)
+
+# Kanban Board Views
+class BoardViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing Kanban boards
+    """
+    queryset = Board.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return BoardDetailSerializer
+        return BoardSerializer
+    
+    def get_queryset(self):
+        return self.queryset.all()
+    
+    def perform_create(self, serializer):
+        # Ensure the workspace exists and user has access
+        workspace_id = self.request.data.get('workspace')
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        
+        # Check if a board already exists for this workspace
+        if Board.objects.filter(workspace=workspace).exists():
+            raise serializers.ValidationError(
+                {"detail": "A board already exists for this workspace"}
+            )
+        
+        # Create the board with default title if not provided
+        title = self.request.data.get('title', f"Board for {workspace.title}")
+        serializer.save(title=title)
+    
+    @action(detail=False, methods=['get'])
+    def for_workspace(self, request):
+        """
+        Get the board for a specific workspace
+        """
+        workspace_id = request.query_params.get('workspace_id')
+        if not workspace_id:
+            return Response(
+                {"detail": "workspace_id parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        workspace = get_object_or_404(Workspace, id=workspace_id)
+        
+        # Check if user has access to the workspace
+        project = workspace.project
+        if not (project.creator == request.user or 
+                ProjectMember.objects.filter(project=project, user=request.user).exists()):
+            return Response(
+                {"detail": "You don't have access to this workspace"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Try to get the board, create if it doesn't exist
+        board, created = Board.objects.get_or_create(
+            workspace=workspace,
+            defaults={
+                'title': f"Board for {workspace.title}"
+            }
+        )
+        
+        # If board was just created, create default columns
+        if created:
+            default_columns = [
+                {"title": "To Do", "order": 0},
+                {"title": "In Progress", "order": 1},
+                {"title": "Review", "order": 2},
+                {"title": "Completed", "order": 3}
+            ]
+            
+            for col in default_columns:
+                Column.objects.create(board=board, **col)
+        
+        serializer = BoardDetailSerializer(board, context={'request': request})
+        return Response(serializer.data)
+
+class ColumnViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing columns in Kanban boards
+    """
+    queryset = Column.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return ColumnDetailSerializer
+        return ColumnSerializer
+    
+    def get_queryset(self):
+        board_id = self.request.query_params.get('board')
+        if board_id:
+            return self.queryset.filter(board_id=board_id)
+        return self.queryset.all()
+    
+    def perform_create(self, serializer):
+        # Check if the board exists and the user has access
+        board_id = self.request.data.get('board')
+        board = get_object_or_404(Board, id=board_id)
+        
+        # Get the max order and add 1 for new column
+        max_order = Column.objects.filter(board=board).order_by('-order').first()
+        new_order = (max_order.order + 1) if max_order else 0
+        
+        serializer.save(order=new_order)
+    
+    @action(detail=True, methods=['patch'])
+    def reorder(self, request, pk=None):
+        """
+        Update the order of a column
+        """
+        column = self.get_object()
+        new_order = request.data.get('order')
+        
+        if new_order is None:
+            return Response(
+                {"detail": "order parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update all affected columns
+        columns = Column.objects.filter(board=column.board).order_by('order')
+        
+        # Save current order
+        old_order = column.order
+        
+        if new_order < old_order:
+            # Moving up: increment order of columns in between
+            for col in columns:
+                if new_order <= col.order < old_order:
+                    col.order += 1
+                    col.save()
+        else:
+            # Moving down: decrement order of columns in between
+            for col in columns:
+                if old_order < col.order <= new_order:
+                    col.order -= 1
+                    col.save()
+        
+        # Update this column's order
+        column.order = new_order
+        column.save()
+        
+        return Response(ColumnSerializer(column).data)
+
+class TaskViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing tasks in Kanban columns
+    """
+    queryset = Task.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return TaskCreateSerializer
+        elif self.action == 'retrieve':
+            return TaskDetailSerializer
+        return TaskSerializer
+    
+    def get_queryset(self):
+        column_id = self.request.query_params.get('column')
+        if column_id:
+            return self.queryset.filter(column_id=column_id)
+        
+        board_id = self.request.query_params.get('board')
+        if board_id:
+            columns = Column.objects.filter(board_id=board_id)
+            return self.queryset.filter(column__in=columns)
+        
+        return self.queryset.all()
+    
+    def perform_create(self, serializer):
+        column_id = self.request.data.get('column')
+        column = get_object_or_404(Column, id=column_id)
+        
+        # Get max order in the column and add 1
+        max_order = Task.objects.filter(column=column).order_by('-order').first()
+        new_order = (max_order.order + 1) if max_order else 0
+        
+        serializer.save(created_by=self.request.user, order=new_order)
+    
+    @action(detail=True, methods=['patch'])
+    def move(self, request, pk=None):
+        """
+        Move a task to a different column or change its order
+        """
+        task = self.get_object()
+        
+        # Validate request data
+        serializer = TaskMoveSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        
+        target_column = serializer.validated_data['target_column']
+        new_order = serializer.validated_data.get('order')
+        
+        # If moving to a different column
+        if task.column.id != target_column.id:
+            # Get max order in target column if not specified
+            if new_order is None:
+                max_order = Task.objects.filter(column=target_column).order_by('-order').first()
+                new_order = (max_order.order + 1) if max_order else 0
+            
+            # Reorder tasks in old column
+            for t in Task.objects.filter(column=task.column, order__gt=task.order):
+                t.order -= 1
+                t.save()
+            
+            # Reorder tasks in new column
+            for t in Task.objects.filter(column=target_column, order__gte=new_order):
+                t.order += 1
+                t.save()
+            
+            # Update task
+            task.column = target_column
+            task.order = new_order
+            task.save()
+        
+        # If just changing order in the same column
+        elif new_order is not None and task.order != new_order:
+            old_order = task.order
+            
+            if new_order < old_order:
+                # Moving up: increment order of tasks in between
+                for t in Task.objects.filter(column=task.column, order__gte=new_order, order__lt=old_order):
+                    t.order += 1
+                    t.save()
+            else:
+                # Moving down: decrement order of tasks in between
+                for t in Task.objects.filter(column=task.column, order__gt=old_order, order__lte=new_order):
+                    t.order -= 1
+                    t.save()
+            
+            # Update task order
+            task.order = new_order
+            task.save()
+        
+        return Response(TaskSerializer(task, context={'request': request}).data)
+    
+    @action(detail=True, methods=['post'])
+    def assign(self, request, pk=None):
+        """
+        Assign a task to a user
+        """
+        task = self.get_object()
+        print(f"Task assign request for task: {pk}, user: {request.user.id}")
+        
+        # Include task in the request data
+        request_data = request.data.copy()
+        request_data['task'] = str(task.id)
+        
+        try:
+            serializer = TaskAssignmentCreateSerializer(
+                data=request_data, 
+                context={'request': request}
+            )
+            serializer.is_valid(raise_exception=True)
+            
+            # Check if assignment already exists
+            assignee = serializer.validated_data['assignee_id']
+            if TaskAssignment.objects.filter(task=task, assignee=assignee).exists():
+                return Response(
+                    {"detail": "This user is already assigned to this task"}, 
+                    status=status.HTTP_400_BAD_REQUEST
+                )
+            
+            # Verify user permissions by getting project and checking membership
+            try:
+                project = task.column.board.workspace.project
+                print(f"Project for task: {project.id} ({project.title})")
+                print(f"Current user: {request.user.id} ({request.user.username})")
+                print(f"Project creator: {project.creator.id} ({project.creator.username})")
+                
+                user_is_member = ProjectMember.objects.filter(
+                    project=project,
+                    user=request.user
+                ).exists()
+                
+                user_is_creator = (project.creator.id == request.user.id)
+                
+                print(f"User is member: {user_is_member}, User is creator: {user_is_creator}")
+                
+                if not (user_is_member or user_is_creator):
+                    print("PERMISSION DENIED: User is neither member nor creator")
+                    return Response(
+                        {"detail": "You do not have permission to assign tasks in this project"},
+                        status=status.HTTP_403_FORBIDDEN
+                    )
+                
+                # Create the assignment
+                print(f"Creating assignment: Task {task.id}, Assignee: {assignee.id}")
+                assignment = serializer.save()
+                return Response(
+                    TaskAssignmentSerializer(assignment).data, 
+                    status=status.HTTP_201_CREATED
+                )
+            except Exception as e:
+                print(f"Error in permission check: {str(e)}")
+                return Response(
+                    {"detail": f"Error checking permissions: {str(e)}"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR
+                )
+                
+        except serializers.ValidationError as e:
+            print(f"Validation error in task assignment: {str(e)}")
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            print(f"Unexpected error in task assignment: {str(e)}")
+            return Response(
+                {"detail": f"Error assigning task: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    @action(detail=True, methods=['delete'])
+    def unassign(self, request, pk=None):
+        """
+        Remove a user assignment from a task
+        """
+        task = self.get_object()
+        user_id = request.query_params.get('user_id')
+        
+        if not user_id:
+            return Response(
+                {"detail": "user_id parameter is required"}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Find and delete the assignment
+        try:
+            assignment = TaskAssignment.objects.get(task=task, assignee__id=user_id)
+            assignment.delete()
+            return Response(status=status.HTTP_204_NO_CONTENT)
+        except TaskAssignment.DoesNotExist:
+            return Response(
+                {"detail": "Assignment not found"}, 
+                status=status.HTTP_404_NOT_FOUND
+            )
+    
+    @action(detail=True, methods=['post'])
+    def comment(self, request, pk=None):
+        """
+        Add a comment to a task
+        """
+        task = self.get_object()
+        
+        # Include task in the request data
+        request_data = request.data.copy()
+        request_data['task'] = str(task.id)
+        
+        serializer = TaskCommentCreateSerializer(
+            data=request_data,
+            context={'request': request}
+        )
+        serializer.is_valid(raise_exception=True)
+        
+        comment = serializer.save()
+        return Response(
+            TaskCommentSerializer(comment, context={'request': request}).data,
+            status=status.HTTP_201_CREATED
+        )
+    
+    @action(detail=True, methods=['get'])
+    def comments(self, request, pk=None):
+        """
+        Get all comments for a task
+        """
+        task = self.get_object()
+        comments = TaskComment.objects.filter(task=task).order_by('created_at')
+        serializer = TaskCommentSerializer(comments, many=True, context={'request': request})
+        return Response(serializer.data)
+        
+class TaskCommentViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for managing task comments
+    """
+    queryset = TaskComment.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    serializer_class = TaskCommentSerializer
+    http_method_names = ['get', 'post', 'patch', 'delete']
+    
+    def get_queryset(self):
+        task_id = self.request.query_params.get('task')
+        if task_id:
+            return self.queryset.filter(task_id=task_id)
+        return self.queryset.all()
+    
+    def perform_create(self, serializer):
+        serializer.save(author=self.request.user)
+    
+    def perform_update(self, serializer):
+        # Only allow the author to update their comment
+        comment = self.get_object()
+        if comment.author != self.request.user:
+            raise permissions.PermissionDenied("You can only edit your own comments")
+        serializer.save()
+    
+    def perform_destroy(self, instance):
+        # Only allow the author or project admin to delete comments
+        if instance.author != self.request.user:
+            # Check if user is project admin
+            project = instance.task.column.board.workspace.project
+            is_admin = ProjectMember.objects.filter(
+                project=project, 
+                user=self.request.user, 
+                role='admin'
+            ).exists()
+            
+            if not is_admin and project.creator != self.request.user:
+                raise permissions.PermissionDenied(
+                    "You can only delete your own comments unless you're a project admin"
+                )
+        
+        instance.delete()
+
+class WorkspaceBoardView(generics.RetrieveAPIView):
+    """
+    View for retrieving a board for a workspace by its slug
+    """
+    serializer_class = BoardDetailSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_object(self):
+        workspace_slug = self.kwargs.get('workspace_slug')
+        workspace = get_object_or_404(Workspace, slug=workspace_slug)
+        
+        # Check if user has access to the workspace
+        project = workspace.project
+        if not (project.creator == self.request.user or 
+                ProjectMember.objects.filter(project=project, user=self.request.user).exists()):
+            raise permissions.PermissionDenied("You don't have access to this workspace")
+        
+        # Get or create the board
+        board, created = Board.objects.get_or_create(
+            workspace=workspace,
+            defaults={
+                'title': f"Board for {workspace.title}"
+            }
+        )
+        
+        # If board was just created, create default columns
+        if created:
+            default_columns = [
+                {"title": "To Do", "order": 0},
+                {"title": "In Progress", "order": 1},
+                {"title": "Review", "order": 2},
+                {"title": "Completed", "order": 3}
+            ]
+            
+            for col in default_columns:
+                Column.objects.create(board=board, **col)
+        
+        return board 

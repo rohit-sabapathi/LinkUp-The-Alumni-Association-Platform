@@ -213,4 +213,159 @@ class Resource(models.Model):
         if self.file and not self.file_size and hasattr(self.file, 'size'):
             self.file_size = self.file.size
             
-        super().save(*args, **kwargs) 
+        super().save(*args, **kwargs)
+
+# Kanban Board Models
+class Board(models.Model):
+    """
+    Model for a Kanban board associated with a workspace
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.OneToOneField(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='kanban_board'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Board for {self.workspace.title}"
+
+class Column(models.Model):
+    """
+    Model for a column within a Kanban board (e.g., To Do, In Progress, Review, Completed)
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    board = models.ForeignKey(
+        Board,
+        on_delete=models.CASCADE,
+        related_name='columns'
+    )
+    title = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)  # For ordering columns on the board
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['order']
+        unique_together = ('board', 'title')
+    
+    def __str__(self):
+        return f"{self.title} ({self.board.title})"
+
+class Task(models.Model):
+    """
+    Model for a task within a Kanban column
+    """
+    PRIORITY_CHOICES = (
+        ('low', 'Low'),
+        ('medium', 'Medium'),
+        ('high', 'High'),
+        ('urgent', 'Urgent'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    column = models.ForeignKey(
+        Column,
+        on_delete=models.CASCADE,
+        related_name='tasks'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    priority = models.CharField(max_length=20, choices=PRIORITY_CHOICES, default='medium')
+    due_date = models.DateField(blank=True, null=True)
+    order = models.PositiveIntegerField(default=0)  # For ordering tasks within a column
+    
+    # Task attributes
+    is_blocked = models.BooleanField(default=False)
+    blocked_reason = models.TextField(blank=True, null=True)
+    estimated_hours = models.FloatField(blank=True, null=True)
+    
+    # Attachments
+    attachment = models.FileField(upload_to='task_attachments/', blank=True, null=True)
+    attachment_name = models.CharField(max_length=255, blank=True, null=True)
+    
+    # Timestamps and user info
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='created_tasks',
+        null=True
+    )
+    
+    class Meta:
+        ordering = ['order', 'due_date', '-created_at']
+    
+    def __str__(self):
+        return self.title
+
+class TaskAssignment(models.Model):
+    """
+    Model to track task assignments to project members
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='assignments'
+    )
+    assignee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='assigned_tasks'
+    )
+    assigned_at = models.DateTimeField(auto_now_add=True)
+    assigned_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='task_assignments_made',
+        null=True
+    )
+    
+    class Meta:
+        unique_together = ('task', 'assignee')
+        ordering = ['assigned_at']
+    
+    def __str__(self):
+        return f"{self.task.title} assigned to {self.assignee.username}"
+
+class TaskComment(models.Model):
+    """
+    Model for comments on tasks
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    task = models.ForeignKey(
+        Task,
+        on_delete=models.CASCADE,
+        related_name='comments'
+    )
+    author = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='task_comments'
+    )
+    content = models.TextField()
+    attachment = models.FileField(upload_to='task_comment_attachments/', blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['created_at']
+    
+    def __str__(self):
+        return f"Comment by {self.author.username} on {self.task.title}" 

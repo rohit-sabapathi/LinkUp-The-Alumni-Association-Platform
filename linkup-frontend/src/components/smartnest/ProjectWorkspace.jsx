@@ -14,6 +14,7 @@ import {
 import { toast } from 'react-hot-toast';
 
 import ResourceSharing from '../resources/ResourceSharing';
+import KanbanBoard from '../kanban/KanbanBoard';
 import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
 
 // Custom ErrorBoundary to handle chat errors
@@ -220,37 +221,42 @@ const ProjectWorkspace = () => {
         <div className="flex-1 p-6 overflow-auto">
           {/* Chat Tab */}
           {activeTab === 'chat' && (
-  <div className="h-full flex flex-col overflow-hidden">
-    <div className="flex-1 min-h-0 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden flex flex-col">
-      <div className="p-4 border-b border-slate-700 shrink-0">
-        <h3 className="font-medium text-slate-300">Team Discussion</h3>
-      </div>
-      <div className="flex-1 overflow-hidden">
-        <ErrorBoundary fallback={
-          <div className="flex justify-center items-center h-full p-6">
-            <div className="text-slate-400 text-center">
-              <p className="mb-2">Component error occurred</p>
-              <p className="text-sm">Try refreshing the page</p>
+            <div className="h-full flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden flex flex-col">
+                <div className="p-4 border-b border-slate-700 shrink-0">
+                  <h3 className="font-medium text-slate-300">Team Discussion</h3>
+                </div>
+                <div className="flex-1 overflow-hidden">
+                  <ErrorBoundary fallback={
+                    <div className="flex justify-center items-center h-full p-6">
+                      <div className="text-slate-400 text-center">
+                        <p className="mb-2">Component error occurred</p>
+                        <p className="text-sm">Try refreshing the page</p>
+                      </div>
+                    </div>
+                  }>
+                    <div className="w-full h-full overflow-hidden">
+                      <CometChatApp />
+                    </div>
+                  </ErrorBoundary>
+                </div>
+              </div>
             </div>
-          </div>
-        }>
-          <div className="w-full h-full overflow-hidden">
-            <CometChatApp />
-          </div>
-        </ErrorBoundary>
-      </div>
-    </div>
-  </div>
-)}
-
+          )}
           
           {/* Tracking Tab */}
           {activeTab === 'tracking' && (
-            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] p-6 flex items-center justify-center">
-              <div className="text-slate-400 text-center">
-                <p className="mb-2">Project tracking functionality coming soon...</p>
-                <p className="text-sm max-w-md mx-auto">Track tasks, deadlines, milestones and progress for your project</p>
-              </div>
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] overflow-hidden">
+              <ErrorBoundary fallback={
+                <div className="flex justify-center items-center h-full p-6">
+                  <div className="text-slate-400 text-center">
+                    <p className="mb-2">Error loading project board</p>
+                    <p className="text-sm">Try refreshing the page</p>
+                  </div>
+                </div>
+              }>
+                <KanbanBoard workspaceSlug={workspaceSlug} />
+              </ErrorBoundary>
             </div>
           )}
           

@@ -1,6 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Project, Workspace, ProjectMember, JoinRequest, ResourceCategory, Resource
+from .models import (
+    Project, Workspace, ProjectMember, JoinRequest, 
+    ResourceCategory, Resource, Board, Column, 
+    Task, TaskAssignment, TaskComment
+)
 
 User = get_user_model()
 
@@ -283,4 +287,187 @@ class ResourceCategoryCreateSerializer(serializers.ModelSerializer):
         category = ResourceCategory(created_by=user, **validated_data)
         category.save()
         
-        return category 
+        return category
+
+# Kanban Board Serializers
+class TaskCommentSerializer(serializers.ModelSerializer):
+    author = UserMiniSerializer(read_only=True)
+    attachment_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = TaskComment
+        fields = [
+            'id', 'task', 'author', 'content', 'attachment', 
+            'attachment_url', 'created_at', 'updated_at'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'author']
+    
+    def get_attachment_url(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and hasattr(obj.attachment, 'url') and request is not None:
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
+
+class TaskAssignmentSerializer(serializers.ModelSerializer):
+    assignee = UserMiniSerializer(read_only=True)
+    assigned_by = UserMiniSerializer(read_only=True)
+    
+    class Meta:
+        model = TaskAssignment
+        fields = ['id', 'task', 'assignee', 'assigned_at', 'assigned_by']
+        read_only_fields = ['id', 'assigned_at', 'assigned_by']
+
+class TaskSerializer(serializers.ModelSerializer):
+    created_by = UserMiniSerializer(read_only=True)
+    assignments = TaskAssignmentSerializer(many=True, read_only=True)
+    comments_count = serializers.SerializerMethodField()
+    attachment_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'column', 'title', 'description', 'priority',
+            'due_date', 'order', 'is_blocked', 'blocked_reason',
+            'estimated_hours', 'attachment', 'attachment_name',
+            'attachment_url', 'created_at', 'updated_at',
+            'created_by', 'assignments', 'comments_count'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'created_by']
+    
+    def get_comments_count(self, obj):
+        return obj.comments.count()
+    
+    def get_attachment_url(self, obj):
+        request = self.context.get('request')
+        if obj.attachment and hasattr(obj.attachment, 'url') and request is not None:
+            return request.build_absolute_uri(obj.attachment.url)
+        return None
+
+class TaskDetailSerializer(TaskSerializer):
+    comments = TaskCommentSerializer(many=True, read_only=True, source='comments.all')
+    
+    class Meta(TaskSerializer.Meta):
+        fields = TaskSerializer.Meta.fields + ['comments']
+
+class ColumnSerializer(serializers.ModelSerializer):
+    tasks_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Column
+        fields = [
+            'id', 'board', 'title', 'description', 
+            'order', 'created_at', 'updated_at', 'tasks_count'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_tasks_count(self, obj):
+        return obj.tasks.count()
+
+class ColumnDetailSerializer(ColumnSerializer):
+    tasks = TaskSerializer(many=True, read_only=True, source='tasks.all')
+    
+    class Meta(ColumnSerializer.Meta):
+        fields = ColumnSerializer.Meta.fields + ['tasks']
+
+class BoardSerializer(serializers.ModelSerializer):
+    columns_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Board
+        fields = [
+            'id', 'workspace', 'title', 'description',
+            'created_at', 'updated_at', 'columns_count'
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_columns_count(self, obj):
+        return obj.columns.count()
+
+class BoardDetailSerializer(BoardSerializer):
+    columns = ColumnSerializer(many=True, read_only=True, source='columns.all')
+    
+    class Meta(BoardSerializer.Meta):
+        fields = BoardSerializer.Meta.fields + ['columns']
+
+# Task Creation and Update Serializers
+class TaskCreateSerializer(serializers.ModelSerializer):
+    # Add board and workspace as write-only fields for permission checks
+    board = serializers.UUIDField(required=False, write_only=True)
+    workspace = serializers.UUIDField(required=False, write_only=True)
+    
+    class Meta:
+        model = Task
+        fields = [
+            'id', 'column', 'title', 'description', 'priority',
+            'due_date', 'order', 'is_blocked', 'blocked_reason',
+            'estimated_hours', 'attachment', 'attachment_name',
+            'board', 'workspace',  # Added for permission checks
+            'created_at', 'updated_at'  # Include timestamps
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def create(self, validated_data):
+        # Remove the board and workspace fields since they're not part of the Task model
+        if 'board' in validated_data:
+            validated_data.pop('board')
+        if 'workspace' in validated_data:
+            validated_data.pop('workspace')
+            
+        # Create the task instance
+        task = Task(**validated_data)
+        
+        # Save to generate the UUID
+        task.save()
+        
+        # Return the saved task with its ID
+        return task
+
+class TaskMoveSerializer(serializers.Serializer):
+    target_column = serializers.UUIDField()
+    order = serializers.IntegerField(required=False)
+    
+    def validate_target_column(self, value):
+        try:
+            column = Column.objects.get(id=value)
+            return column
+        except Column.DoesNotExist:
+            raise serializers.ValidationError("Target column does not exist")
+
+class TaskAssignmentCreateSerializer(serializers.ModelSerializer):
+    assignee_id = serializers.UUIDField(write_only=True)
+    
+    class Meta:
+        model = TaskAssignment
+        fields = ['task', 'assignee_id']
+    
+    def validate_assignee_id(self, value):
+        try:
+            user = User.objects.get(id=value)
+            # Check if user is a member of the project
+            task = self.initial_data.get('task')
+            if task:
+                task_obj = Task.objects.get(id=task)
+                project = task_obj.column.board.workspace.project
+                if not ProjectMember.objects.filter(project=project, user=user).exists():
+                    raise serializers.ValidationError("User is not a member of this project")
+            return user
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User does not exist")
+    
+    def create(self, validated_data):
+        assignee = validated_data.pop('assignee_id')
+        assigned_by = self.context['request'].user
+        return TaskAssignment.objects.create(
+            assignee=assignee,
+            assigned_by=assigned_by,
+            **validated_data
+        )
+
+class TaskCommentCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskComment
+        fields = ['task', 'content', 'attachment']
+    
+    def create(self, validated_data):
+        author = self.context['request'].user
+        return TaskComment.objects.create(author=author, **validated_data) 
