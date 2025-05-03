@@ -21,6 +21,10 @@ DEBUG = True
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '0.0.0.0']
 
+# X-Frame-Options settings
+X_FRAME_OPTIONS = 'SAMEORIGIN'
+SECURE_CROSS_ORIGIN_OPENER_POLICY = None
+
 # Application definition
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -168,6 +172,7 @@ CSRF_COOKIE_SECURE = False
 CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
 CSRF_COOKIE_SAMESITE = None
+
 
 # Rest Framework settings
 REST_FRAMEWORK = {

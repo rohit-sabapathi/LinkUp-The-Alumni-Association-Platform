@@ -22,6 +22,26 @@ const FileViewer = ({ file }) => {
   
   const fileType = file.file_type || file.file_url.split('.').pop().toLowerCase();
 
+  // Function to handle file download
+  const handleDownload = async () => {
+    try {
+      const response = await fetch(file.file_url);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = file.title || 'download';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error('Error downloading file:', error);
+      // Fallback to direct link
+      window.open(file.file_url, '_blank');
+    }
+  };
+
   const renderFileContent = () => {
     if (['jpg', 'jpeg', 'png', 'gif', 'svg', 'webp'].includes(fileType)) {
       return (
@@ -45,12 +65,15 @@ const FileViewer = ({ file }) => {
 
     if (fileType === 'pdf') {
       return (
-        <div className="w-full h-[70vh] bg-slate-800 rounded-lg overflow-hidden">
-          <iframe 
-            src={`${file.file_url}#toolbar=0`} 
-            title={file.title}
-            className="w-full h-full"
-          />
+        <div className="bg-slate-800 rounded-lg p-8 flex flex-col items-center justify-center">
+          <DocumentTextIcon className="w-16 h-16 text-red-400 mb-4" />
+          <p className="text-slate-300 mb-4">PDF files open in a new tab for best viewing experience</p>
+          <button 
+            onClick={() => window.open(file.file_url, '_blank')}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white transition-colors"
+          >
+            View PDF
+          </button>
         </div>
       );
     }
@@ -70,13 +93,14 @@ const FileViewer = ({ file }) => {
     }
 
     if (['doc', 'docx', 'ppt', 'pptx', 'xls', 'xlsx'].includes(fileType)) {
-      const googleViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(file.file_url)}&embedded=true`;
+      const officeViewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(file.file_url)}&embedded=true`;
       return (
         <div className="w-full h-[70vh] bg-slate-800 rounded-lg overflow-hidden">
           <iframe 
-            src={googleViewerUrl} 
+            src={officeViewerUrl} 
             title={file.title}
             className="w-full h-full"
+            frameBorder="0"
           />
         </div>
       );
@@ -87,15 +111,12 @@ const FileViewer = ({ file }) => {
         {getFileIcon()}
         <p className="mt-4 text-slate-300">{file.title}</p>
         <p className="text-slate-500 text-sm mb-4">This file type cannot be previewed</p>
-        <a 
-          href={file.file_url}
-          download
-          target="_blank"
-          rel="noopener noreferrer"
+        <button 
+          onClick={handleDownload}
           className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white transition-colors"
         >
           Download File
-        </a>
+        </button>
       </div>
     );
   };
@@ -130,15 +151,12 @@ const FileViewer = ({ file }) => {
     <div className="w-full">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-xl font-semibold text-slate-200">{file.title}</h3>
-        <a 
-          href={file.file_url}
-          download
-          target="_blank"
-          rel="noopener noreferrer"
+        <button 
+          onClick={handleDownload}
           className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 rounded-lg text-white text-sm transition-colors"
         >
           Download
-        </a>
+        </button>
       </div>
 
       {file.description && (

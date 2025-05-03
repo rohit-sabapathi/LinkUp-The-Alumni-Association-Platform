@@ -131,6 +131,16 @@ const ResourceSharing = ({ workspace }) => {
   };
   
   const handleViewResource = (resource) => {
+    const fileType = resource.file_type?.toLowerCase() || 
+                 resource.file_url?.split('.').pop().toLowerCase() || '';
+                 
+    // For PDFs, open directly in a new tab
+    if (fileType === 'pdf') {
+      window.open(resource.file_url, '_blank');
+      return;
+    }
+    
+    // For other file types, use the built-in viewer
     setSelectedResource(resource);
     setView('viewResource');
   };
