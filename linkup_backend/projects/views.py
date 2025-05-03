@@ -5,7 +5,7 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework import serializers
 
-from .models import Project, Workspace, ProjectMember, JoinRequest
+from .models import Project, Workspace, ProjectMember, JoinRequest, ResourceCategory, Resource
 from .serializers import (
     ProjectListSerializer, 
     ProjectDetailSerializer, 
@@ -14,7 +14,12 @@ from .serializers import (
     ProjectMemberSerializer,
     JoinRequestSerializer,
     JoinRequestCreateSerializer,
-    JoinRequestStatusUpdateSerializer
+    JoinRequestStatusUpdateSerializer,
+    ResourceCategorySerializer,
+    ResourceCategoryDetailSerializer,
+    ResourceCategoryCreateSerializer,
+    ResourceSerializer,
+    ResourceCreateSerializer
 )
 
 class ProjectViewSet(viewsets.ModelViewSet):
@@ -68,6 +73,8 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
+        
         print("Creating new project...")
         # Pass user directly instead of as a parameter to avoid double creator issue
         user = self.request.user
@@ -373,16 +380,162 @@ class UserWorkspacesView(generics.ListAPIView):
     
     def get_queryset(self):
         user = self.request.user
-        # Get projects where user is either creator or member
-        user_projects = Project.objects.filter(
-            Q(creator=user) | Q(members__user=user)
-        ).distinct()
         
-        # Get workspaces for these projects
-        workspaces = Workspace.objects.filter(project__in=user_projects)
+        # Get projects where the user is a member
+        member_projects = ProjectMember.objects.filter(user=user).values_list('project', flat=True)
         
-        print(f"User {user.username} (ID: {user.id}) has {workspaces.count()} workspaces")
-        for workspace in workspaces:
-            print(f"Workspace: {workspace.title} (Slug: {workspace.slug})")
+        # Get workspaces for those projects
+        return Workspace.objects.filter(
+            Q(project__creator=user) | Q(project__id__in=member_projects)
+        )
         
-        return workspaces 
+# New views for resource sharing feature
+
+class IsWorkspaceMember(permissions.BasePermission):
+    """
+    Permission to check if user is a member of the workspace's project
+    """
+    def has_permission(self, request, view):
+        # For create methods, check if user is member of the workspace
+        if request.method == 'POST':
+            workspace_id = request.data.get('workspace')
+            category_id = request.data.get('category')
+            
+            try:
+                if workspace_id:
+                    workspace = Workspace.objects.get(id=workspace_id)
+                elif category_id:
+                    category = ResourceCategory.objects.get(id=category_id)
+                    workspace = category.workspace
+                else:
+                    return False
+                    
+                return ProjectMember.objects.filter(
+                    project=workspace.project,
+                    user=request.user
+                ).exists() or workspace.project.creator == request.user
+            except (Workspace.DoesNotExist, ResourceCategory.DoesNotExist):
+                return False
+                
+        return True
+    
+    def has_object_permission(self, request, view, obj):
+        # Get the workspace - either directly or through the category
+        if isinstance(obj, ResourceCategory):
+            workspace = obj.workspace
+        elif isinstance(obj, Resource):
+            workspace = obj.category.workspace
+        else:
+            return False
+            
+        # Check if user is a member of the workspace's project
+        return ProjectMember.objects.filter(
+            project=workspace.project,
+            user=request.user
+        ).exists() or workspace.project.creator == request.user
+
+class ResourceCategoryViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for resource categories within workspaces
+    """
+    queryset = ResourceCategory.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    filterset_fields = ['workspace']
+    http_method_names = ['get', 'post', 'patch', 'delete']
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ResourceCategoryCreateSerializer
+        elif self.action == 'retrieve':
+            return ResourceCategoryDetailSerializer
+        return ResourceCategorySerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by workspace if provided
+        workspace_id = self.request.query_params.get('workspace')
+        if workspace_id:
+            queryset = queryset.filter(workspace_id=workspace_id)
+            
+        # Filter to only show categories from workspaces where user is a member
+        user = self.request.user
+        member_projects = ProjectMember.objects.filter(user=user).values_list('project', flat=True)
+        
+        return queryset.filter(
+            Q(workspace__project__creator=user) | 
+            Q(workspace__project__id__in=member_projects)
+        )
+    
+    def perform_create(self, serializer):
+        serializer.save()
+        
+    @action(detail=True, methods=['get'])
+    def resources(self, request, pk=None):
+        """
+        Get all resources in a category
+        """
+        category = self.get_object()
+        resources = category.resources.all()
+        serializer = ResourceSerializer(
+            resources, 
+            many=True, 
+            context={'request': request}
+        )
+        return Response(serializer.data)
+
+class ResourceViewSet(viewsets.ModelViewSet):
+    """
+    ViewSet for resources (files) within categories
+    """
+    queryset = Resource.objects.all()
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    filterset_fields = ['category']
+    
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return ResourceCreateSerializer
+        return ResourceSerializer
+    
+    def get_queryset(self):
+        queryset = super().get_queryset()
+        
+        # Filter by category if provided
+        category_id = self.request.query_params.get('category')
+        if category_id:
+            queryset = queryset.filter(category_id=category_id)
+            
+        # Filter to only show resources from categories/workspaces where user is a member
+        user = self.request.user
+        member_projects = ProjectMember.objects.filter(user=user).values_list('project', flat=True)
+        
+        return queryset.filter(
+            Q(category__workspace__project__creator=user) | 
+            Q(category__workspace__project__id__in=member_projects)
+        )
+    
+    def perform_create(self, serializer):
+        # Let the serializer handle setting uploaded_by
+        serializer.save()
+    
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        return context
+
+class WorkspaceResourcesView(generics.ListAPIView):
+    """
+    View for listing all resource categories in a workspace
+    """
+    serializer_class = ResourceCategorySerializer
+    permission_classes = [permissions.IsAuthenticated, IsWorkspaceMember]
+    
+    def get_queryset(self):
+        workspace_slug = self.kwargs.get('workspace_slug')
+        workspace = get_object_or_404(Workspace, slug=workspace_slug)
+        
+        # Check permissions manually since we're not using the object permission on the workspace
+        if not ProjectMember.objects.filter(project=workspace.project, user=self.request.user).exists() and \
+           workspace.project.creator != self.request.user:
+            return ResourceCategory.objects.none()
+            
+        return ResourceCategory.objects.filter(workspace=workspace) 

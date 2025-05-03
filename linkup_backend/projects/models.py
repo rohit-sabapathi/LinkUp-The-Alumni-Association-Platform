@@ -137,4 +137,80 @@ class JoinRequest(models.Model):
         ordering = ['-created_at']
     
     def __str__(self):
-        return f"Request from {self.user.username} for {self.project.title} - {self.status}" 
+        return f"Request from {self.user.username} for {self.project.title} - {self.status}"
+
+class ResourceCategory(models.Model):
+    """
+    Model for organizing resources within workspaces into categories
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    workspace = models.ForeignKey(
+        Workspace,
+        on_delete=models.CASCADE,
+        related_name='resource_categories'
+    )
+    name = models.CharField(max_length=100)
+    description = models.TextField(blank=True, null=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='created_categories',
+        null=True
+    )
+    
+    class Meta:
+        verbose_name_plural = "Resource Categories"
+        ordering = ['name']
+        unique_together = ('workspace', 'name')
+    
+    def __str__(self):
+        return f"{self.name} ({self.workspace.title})"
+
+class Resource(models.Model):
+    """
+    Model for storing files and documents within resource categories
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    category = models.ForeignKey(
+        ResourceCategory,
+        on_delete=models.CASCADE,
+        related_name='resources'
+    )
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    file = models.FileField(upload_to='workspace_resources/')
+    file_type = models.CharField(max_length=50, blank=True, null=True)
+    file_size = models.PositiveIntegerField(blank=True, null=True)  # Size in bytes
+    
+    # Timestamps and user info
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        related_name='uploaded_resources',
+        null=True
+    )
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return self.title
+    
+    def save(self, *args, **kwargs):
+        # Set file_type based on file extension
+        if self.file and not self.file_type:
+            filename = self.file.name
+            extension = filename.split('.')[-1].lower() if '.' in filename else ''
+            self.file_type = extension
+            
+        # Set file_size based on actual file size
+        if self.file and not self.file_size and hasattr(self.file, 'size'):
+            self.file_size = self.file.size
+            
+        super().save(*args, **kwargs) 

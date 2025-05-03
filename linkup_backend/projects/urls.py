@@ -6,12 +6,17 @@ from .views import (
     WorkspaceDetailView,
     UserProjectsView,
     UserJoinRequestsView,
-    UserWorkspacesView
+    UserWorkspacesView,
+    ResourceCategoryViewSet,
+    ResourceViewSet,
+    WorkspaceResourcesView
 )
 
 router = DefaultRouter()
-router.register(r'', ProjectViewSet, basename='project')
+router.register(r'resource-categories', ResourceCategoryViewSet, basename='resource-category')
 router.register(r'join-requests', JoinRequestViewSet, basename='join-request')
+router.register(r'resources', ResourceViewSet, basename='resource')
+router.register(r'', ProjectViewSet, basename='project')
 
 urlpatterns = [
     path('', include(router.urls)),
@@ -19,4 +24,5 @@ urlpatterns = [
     path('user/join-requests/', UserJoinRequestsView.as_view(), name='user-join-requests'),
     path('user/workspaces/', UserWorkspacesView.as_view(), name='user-workspaces'),
     path('workspace/<slug:slug>/', WorkspaceDetailView.as_view(), name='workspace-detail'),
+    path('workspace/<slug:workspace_slug>/resources/', WorkspaceResourcesView.as_view(), name='workspace-resources'),
 ] 

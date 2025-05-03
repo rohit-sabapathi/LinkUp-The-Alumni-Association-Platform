@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import Project, Workspace, ProjectMember, JoinRequest
+from .models import Project, Workspace, ProjectMember, JoinRequest, ResourceCategory, Resource
 
 User = get_user_model()
 
@@ -204,4 +204,83 @@ class JoinRequestStatusUpdateSerializer(serializers.ModelSerializer):
                 role='member'
             )
             
-        return instance 
+        return instance
+
+# New serializers for resource sharing feature
+
+class ResourceSerializer(serializers.ModelSerializer):
+    uploaded_by = UserMiniSerializer(read_only=True)
+    file_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = Resource
+        fields = [
+            'id', 'title', 'description', 'file', 'file_url',
+            'file_type', 'file_size', 'created_at', 'updated_at',
+            'uploaded_by', 'category'
+        ]
+        read_only_fields = ['id', 'file_url', 'file_type', 'file_size', 
+                           'created_at', 'updated_at', 'uploaded_by']
+    
+    def get_file_url(self, obj):
+        request = self.context.get('request')
+        if obj.file and hasattr(obj.file, 'url') and request is not None:
+            return request.build_absolute_uri(obj.file.url)
+        return None
+    
+class ResourceCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Resource
+        fields = ['title', 'description', 'file', 'category']
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        
+        # Create the resource with the current user as uploader
+        # Make sure uploaded_by is not in validated_data to avoid conflicts
+        if 'uploaded_by' in validated_data:
+            validated_data.pop('uploaded_by')
+            
+        resource = Resource.objects.create(uploaded_by=user, **validated_data)
+        return resource
+
+class ResourceCategorySerializer(serializers.ModelSerializer):
+    created_by = UserMiniSerializer(read_only=True)
+    resources_count = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = ResourceCategory
+        fields = [
+            'id', 'workspace', 'name', 'description', 
+            'created_at', 'created_by', 'resources_count'
+        ]
+        read_only_fields = ['id', 'created_at', 'created_by', 'resources_count']
+    
+    def get_resources_count(self, obj):
+        return obj.resources.count()
+
+class ResourceCategoryDetailSerializer(serializers.ModelSerializer):
+    created_by = UserMiniSerializer(read_only=True)
+    resources = ResourceSerializer(many=True, read_only=True, source='resources.all')
+    
+    class Meta:
+        model = ResourceCategory
+        fields = [
+            'id', 'workspace', 'name', 'description', 
+            'created_at', 'created_by', 'resources'
+        ]
+        read_only_fields = ['id', 'created_at', 'created_by']
+
+class ResourceCategoryCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ResourceCategory
+        fields = ['workspace', 'name', 'description']
+    
+    def create(self, validated_data):
+        user = self.context['request'].user
+        
+        # Create the category with the current user as creator
+        category = ResourceCategory(created_by=user, **validated_data)
+        category.save()
+        
+        return category 

@@ -230,4 +230,130 @@ export const fetchUserWorkspaces = async () => {
     console.error('Error fetching user workspaces:', error);
     throw error.response?.data || { detail: 'Failed to fetch user workspaces' };
   }
+};
+
+// Resource Categories API functions
+export const fetchWorkspaceResourceCategories = async (workspaceSlug) => {
+  try {
+    const response = await axios.get(`${API_URL}/workspace/${workspaceSlug}/resources/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching resource categories:', error);
+    throw error.response?.data || { detail: 'Failed to fetch resource categories' };
+  }
+};
+
+export const createResourceCategory = async (categoryData) => {
+  try {
+    const response = await axios.post(`${API_URL}/resource-categories/`, 
+      categoryData,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error creating resource category:', error);
+    throw error.response?.data || { detail: 'Failed to create resource category' };
+  }
+};
+
+export const fetchResourceCategoryById = async (categoryId) => {
+  try {
+    const response = await axios.get(`${API_URL}/resource-categories/${categoryId}/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching resource category:', error);
+    throw error.response?.data || { detail: 'Failed to fetch resource category' };
+  }
+};
+
+export const updateResourceCategory = async (categoryId, categoryData) => {
+  try {
+    const response = await axios.patch(`${API_URL}/resource-categories/${categoryId}/`, 
+      categoryData,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error updating resource category:', error);
+    throw error.response?.data || { detail: 'Failed to update resource category' };
+  }
+};
+
+export const deleteResourceCategory = async (categoryId) => {
+  try {
+    await axios.delete(`${API_URL}/resource-categories/${categoryId}/`, {
+      headers: getAuthHeader()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error deleting resource category:', error);
+    throw error.response?.data || { detail: 'Failed to delete resource category' };
+  }
+};
+
+// Resources (Files) API functions
+export const fetchCategoryResources = async (categoryId) => {
+  try {
+    const response = await axios.get(`${API_URL}/resource-categories/${categoryId}/resources/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching resources:', error);
+    throw error.response?.data || { detail: 'Failed to fetch resources' };
+  }
+};
+
+export const fetchResourceById = async (resourceId) => {
+  try {
+    const response = await axios.get(`${API_URL}/resources/${resourceId}/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching resource:', error);
+    throw error.response?.data || { detail: 'Failed to fetch resource' };
+  }
+};
+
+export const uploadResource = async (resourceData) => {
+  const formData = new FormData();
+  
+  // Add all fields to formData
+  formData.append('title', resourceData.title);
+  formData.append('description', resourceData.description || '');
+  formData.append('category', resourceData.categoryId);
+  formData.append('file', resourceData.file);
+  
+  try {
+    const response = await axios.post(`${API_URL}/resources/`, 
+      formData,
+      { 
+        headers: {
+          ...getAuthHeader(),
+          'Content-Type': 'multipart/form-data'
+        } 
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error uploading resource:', error);
+    throw error.response?.data || { detail: 'Failed to upload resource' };
+  }
+};
+
+export const deleteResource = async (resourceId) => {
+  try {
+    await axios.delete(`${API_URL}/resources/${resourceId}/`, {
+      headers: getAuthHeader()
+    });
+    return true;
+  } catch (error) {
+    console.error('Error deleting resource:', error);
+    throw error.response?.data || { detail: 'Failed to delete resource' };
+  }
 }; 

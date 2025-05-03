@@ -12,6 +12,7 @@ import {
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 import CometChatApp from '../CometChat/App';
+import ResourceSharing from '../resources/ResourceSharing';
 import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
 
 // Custom ErrorBoundary to handle chat errors
@@ -249,11 +250,10 @@ const ProjectWorkspace = () => {
           
           {/* Sharing Tab */}
           {activeTab === 'sharing' && (
-            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] p-6 flex items-center justify-center">
-              <div className="text-slate-400 text-center">
-                <p className="mb-2">Resource sharing functionality coming soon...</p>
-                <p className="text-sm max-w-md mx-auto">Share documents, links, code repositories and other resources with your team</p>
-              </div>
+            <div className="bg-slate-800/50 rounded-lg border border-slate-700 h-[calc(100vh-220px)] p-6">
+              <ErrorBoundary>
+                <ResourceSharing workspace={workspace} />
+              </ErrorBoundary>
             </div>
           )}
           
