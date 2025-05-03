@@ -8,10 +8,9 @@ import { fontSizes } from './styleConfig';
 import { CometChat } from '@cometchat/chat-sdk-javascript';
 import useSystemColorScheme from './customHooks';
 import { generateExtendedColors } from './utils/utils';
-// import cometChatLogo from './assets/cometchat_logo.svg';
 import { CometChatUIKit } from '@cometchat/chat-uikit-react';
-import { UIKitSettingsBuilder } from '@cometchat/chat-uikit-react';
-import '@cometchat/chat-uikit-react/css-variables.css';
+import '@cometchat/chat-uikit-react/dist/styles/css-variables.css';
+import { UIKitSettingsBuilder } from "@cometchat/chat-uikit-react";
 interface CometChatHomeProps {
   /** Default user for the chat application (optional). */
   user?: CometChat.User;
@@ -30,10 +29,15 @@ function CometChatBuilderApp({ user, group }: CometChatHomeProps) {
   const { styleFeatures, setStyleFeatures } = useBuilderSettingContext();
 
   const systemTheme = useSystemColorScheme();
+
+  /**
+   * Effect to handle login and logout listeners
+   */
+  
   useEffect(() => {
     const loginUser = async () => {
       try {
-        const user = await CometChatUIKit.login('cometchat-uid-1');
+        const user = await CometChatUIKit.login('cometchat-uid-3');
         setLoggedInUser(user);
       } catch (err) {
         console.error('Login failed:', err);
@@ -42,7 +46,7 @@ function CometChatBuilderApp({ user, group }: CometChatHomeProps) {
   
     loginUser();
   }, []);
-  
+
   useEffect(() => {
     const initUIKit = async () => {
       try {
@@ -62,10 +66,8 @@ function CometChatBuilderApp({ user, group }: CometChatHomeProps) {
   
     initUIKit();
   }, []);
+
   
-  /**
-   * Effect to handle login and logout listeners
-   */
   useEffect(() => {
     CometChat.addLoginListener(
       'runnable-sample-app',

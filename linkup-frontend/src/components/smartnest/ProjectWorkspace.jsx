@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
+import CometChatApp from "../CometChat/App";
 import {
   ChatBubbleLeftRightIcon,
   ChartBarIcon,
@@ -219,24 +220,29 @@ const ProjectWorkspace = () => {
         <div className="flex-1 p-6 overflow-auto">
           {/* Chat Tab */}
           {activeTab === 'chat' && (
-            <div className="h-full flex flex-col">
-              <div className="flex-1 min-h-0 mb-4 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden flex flex-col">
-                <div className="p-4 border-b border-slate-700">
-                  <h3 className="font-medium text-slate-300">Team Discussion</h3>
-                </div>
-                <div className="flex-1 overflow-y-auto">
-                  <ErrorBoundary fallback={<div className="flex justify-center items-center h-full p-6">
-                    <div className="text-slate-400 text-center">
-                      <p className="mb-2">Component error occurred</p>
-                      <p className="text-sm">Try refreshing the page</p>
-                    </div>
-                  </div>}>
-                    <CometChatApp />
-                  </ErrorBoundary>
-                </div>
-              </div>
+  <div className="h-full flex flex-col overflow-hidden">
+    <div className="flex-1 min-h-0 bg-slate-800/50 rounded-lg border border-slate-700 overflow-hidden flex flex-col">
+      <div className="p-4 border-b border-slate-700 shrink-0">
+        <h3 className="font-medium text-slate-300">Team Discussion</h3>
+      </div>
+      <div className="flex-1 overflow-hidden">
+        <ErrorBoundary fallback={
+          <div className="flex justify-center items-center h-full p-6">
+            <div className="text-slate-400 text-center">
+              <p className="mb-2">Component error occurred</p>
+              <p className="text-sm">Try refreshing the page</p>
             </div>
-          )}
+          </div>
+        }>
+          <div className="w-full h-full overflow-hidden">
+            <CometChatApp />
+          </div>
+        </ErrorBoundary>
+      </div>
+    </div>
+  </div>
+)}
+
           
           {/* Tracking Tab */}
           {activeTab === 'tracking' && (
