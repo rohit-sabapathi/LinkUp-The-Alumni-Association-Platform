@@ -12,7 +12,7 @@ import {
   DocumentTextIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
-import CometChatApp from '../CometChat/App';
+
 import ResourceSharing from '../resources/ResourceSharing';
 import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
 
