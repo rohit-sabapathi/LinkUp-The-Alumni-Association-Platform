@@ -257,11 +257,11 @@ function CometChatBuilderApp({ user, group }: CometChatHomeProps) {
   }, [styleFeatures.color.brandColor]);
 
   return (
-    <div className="CometChatBuilderApp">
-      <AppContextProvider>
-        {loggedInUser ? <CometChatHome defaultGroup={group} defaultUser={user} /> : <LoginPlaceholder />}
-      </AppContextProvider>
-    </div>
+    <AppContextProvider>
+      <div className="h-full flex flex-col overflow-hidden">
+        <CometChatHome defaultUser={user} defaultGroup={group} />
+      </div>
+    </AppContextProvider>
   );
 }
 
