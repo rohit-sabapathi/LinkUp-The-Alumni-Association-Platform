@@ -95,21 +95,18 @@ class ProjectViewSet(viewsets.ModelViewSet):
         return queryset
     
     def perform_create(self, serializer):
-        serializer.save(created_by=self.request.user)
-        
         print("Creating new project...")
-        # Pass user directly instead of as a parameter to avoid double creator issue
-        user = self.request.user
-        project = serializer.save()
+        # Create the project with the user as creator
+        project = serializer.save(creator=self.request.user)
         
         # Automatically add creator as admin member
         try:
             ProjectMember.objects.create(
                 project=project,
-                user=user,
+                user=self.request.user,
                 role='admin'
             )
-            print(f"Added user {user.username} as admin to project {project.id}")
+            print(f"Added user {self.request.user.username} as admin to project {project.id}")
         except Exception as e:
             print(f"Error adding creator as admin: {str(e)}")
         

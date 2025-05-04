@@ -17,19 +17,31 @@ export const usersAPI = {
   followUser: (userId) => 
     api.post('/auth/follow/', { user_id: userId })
       .then(response => {
-        if (response.data.status !== 'follow_request_sent') {
-          throw new Error(response.data.error || 'Failed to follow user');
+        if (response.data.error) {
+          throw new Error(response.data.error);
         }
         return response;
+      })
+      .catch(error => {
+        if (error.response?.data?.error) {
+          throw new Error(error.response.data.error);
+        }
+        throw error;
       }),
   
   unfollowUser: (userId) => 
     api.post('/auth/unfollow/', { user_id: userId })
       .then(response => {
-        if (response.data.status !== 'unfollowed') {
-          throw new Error(response.data.error || 'Failed to unfollow user');
+        if (response.data.error) {
+          throw new Error(response.data.error);
         }
         return response;
+      })
+      .catch(error => {
+        if (error.response?.data?.error) {
+          throw new Error(error.response.data.error);
+        }
+        throw error;
       }),
   
   // Get followers/following with pagination support

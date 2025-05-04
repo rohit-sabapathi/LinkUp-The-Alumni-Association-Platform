@@ -1,8 +1,10 @@
 import { api } from './api';
 
 export const notificationAPI = {
-  getNotifications: () => 
-    api.get('/auth/notifications/'),
+  getNotifications: (page = 1) => 
+    api.get('/auth/notifications/', {
+      params: { page }
+    }),
 
   markAsRead: (notificationId) =>
     api.post(`/auth/notifications/${notificationId}/read/`),

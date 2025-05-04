@@ -95,29 +95,23 @@ class ProjectCreateSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'created_at', 'creator']
     
     def create(self, validated_data):
-        # Make sure we don't have creator in validated_data
-        if 'creator' in validated_data:
-            validated_data.pop('creator')
-        
-        # Get the user from context
-        user = self.context['request'].user
-        
-        # Create project with user as creator
-        project = Project(creator=user, **validated_data)
-        project.save()
-        
-        # Create workspace for the project
         try:
+            # Create project with user as creator
+            project = Project.objects.create(**validated_data)
+            
+            # Create workspace for the project
             workspace = Workspace.objects.create(
                 project=project,
-                title=f"Workspace for {project.title}",
+                title=project.title,  # Use project title directly
                 description=project.short_description
             )
             print(f"Created workspace with slug: {workspace.slug}")
+            
+            return project
+            
         except Exception as e:
-            print(f"Error creating workspace: {str(e)}")
-        
-        return project
+            print(f"Error in project creation: {str(e)}")
+            raise serializers.ValidationError({"detail": f"Failed to create project: {str(e)}"})
 
 class JoinRequestSerializer(serializers.ModelSerializer):
     user = UserMiniSerializer(read_only=True)
@@ -231,7 +225,7 @@ class ResourceSerializer(serializers.ModelSerializer):
         if obj.file and hasattr(obj.file, 'url') and request is not None:
             return request.build_absolute_uri(obj.file.url)
         return None
-    
+
 class ResourceCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Resource

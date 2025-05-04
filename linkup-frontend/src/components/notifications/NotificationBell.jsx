@@ -8,6 +8,9 @@ const NotificationBell = () => {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
   const dropdownRef = useRef(null);
 
   useEffect(() => {
@@ -27,13 +30,37 @@ const NotificationBell = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (page = 1) => {
     try {
-      const response = await notificationAPI.getNotifications();
-      setNotifications(response.data);
-      setUnreadCount(response.data.filter(n => !n.is_read).length);
+      setIsLoading(true);
+      const response = await notificationAPI.getNotifications(page);
+      
+      if (response.data.error) {
+        throw new Error(response.data.error);
+      }
+
+      const newNotifications = response.data.results || [];
+      
+      if (page === 1) {
+        setNotifications(newNotifications);
+      } else {
+        setNotifications(prev => [...prev, ...newNotifications]);
+      }
+      
+      setHasMore(!!response.data.next);
+      setUnreadCount(newNotifications.filter(n => !n.is_read).length);
+      setCurrentPage(page);
     } catch (error) {
       console.error('Failed to fetch notifications:', error);
+      toast.error('Failed to load notifications');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!isLoading && hasMore) {
+      fetchNotifications(currentPage + 1);
     }
   };
 
@@ -47,10 +74,12 @@ const NotificationBell = () => {
         setUnreadCount(prev => Math.max(0, prev - 1));
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
+        toast.error('Failed to mark notification as read');
       }
     }
 
-    if (notification.type === 'follow_request') {
+    // Check if this is a follow request based on the title
+    if (notification.title === 'New Follow Request') {
       handleFollowRequest(notification);
     }
   };
@@ -59,7 +88,13 @@ const NotificationBell = () => {
     const accept = window.confirm('Would you like to accept this follow request?');
     try {
       const action = accept ? 'accept' : 'decline';
-      await notificationAPI.handleFollowRequest(notification.related_id, action);
+      // Extract request ID from the notification message
+      const requestId = notification.message.match(/Request ID: (\d+)/)?.[1];
+      if (!requestId) {
+        toast.error('Could not process follow request');
+        return;
+      }
+      await notificationAPI.handleFollowRequest(requestId, action);
       toast.success(`Follow request ${action}ed`);
       // Remove the notification from the list
       setNotifications(notifications.filter(n => n.id !== notification.id));
@@ -87,7 +122,7 @@ const NotificationBell = () => {
         <div className="absolute right-0 mt-2 w-80 bg-slate-800 rounded-lg shadow-lg py-1 z-50">
           {notifications.length === 0 ? (
             <div className="px-4 py-2 text-slate-400 text-center">
-              No notifications
+              {isLoading ? 'Loading notifications...' : 'No notifications'}
             </div>
           ) : (
             <div className="max-h-96 overflow-y-auto">
@@ -117,6 +152,15 @@ const NotificationBell = () => {
                   </div>
                 </div>
               ))}
+              {hasMore && (
+                <button
+                  onClick={loadMore}
+                  className="w-full px-4 py-2 text-sm text-slate-400 hover:text-slate-300 hover:bg-slate-700/50"
+                  disabled={isLoading}
+                >
+                  {isLoading ? 'Loading...' : 'Load more'}
+                </button>
+              )}
             </div>
           )}
         </div>

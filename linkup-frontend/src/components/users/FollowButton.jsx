@@ -17,23 +17,23 @@ const FollowButton = ({ userId, initialIsFollowing, initialRequestSent, onFollow
         toast.success('Unfollowed successfully');
         setIsFollowing(false);
         setRequestSent(false);
+        if (onFollowChange) {
+          onFollowChange(false);
+        }
       } else {
         const response = await usersAPI.followUser(userId);
         if (response.data.status === 'follow_request_sent') {
           toast.success('Follow request sent');
           setRequestSent(true);
+          if (onFollowChange) {
+            onFollowChange(true);
+          }
         }
-      }
-      if (onFollowChange) {
-        onFollowChange(isFollowing ? false : true);
       }
     } catch (error) {
       console.error('Failed to follow/unfollow:', error);
       toast.error(error.message || 'Failed to update follow status');
-      // Revert the optimistic update if it failed
-      if (onFollowChange) {
-        onFollowChange(isFollowing);
-      }
+      // Don't revert any state since we haven't changed it yet
     } finally {
       setIsLoading(false);
     }

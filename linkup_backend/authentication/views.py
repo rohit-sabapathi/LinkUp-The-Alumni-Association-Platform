@@ -87,32 +87,71 @@ def follow_user(request):
     if user_to_follow == request.user:
         return Response({'error': 'You cannot follow yourself'}, status=status.HTTP_400_BAD_REQUEST)
 
-    # Check if there's already a pending request
+    # Check if already following
+    if UserFollowing.objects.filter(user=request.user, following_user=user_to_follow).exists():
+        return Response({'error': 'Already following this user'}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Check if there's any existing follow request
     existing_request = FollowRequest.objects.filter(
         from_user=request.user,
-        to_user=user_to_follow,
-        status='pending'
+        to_user=user_to_follow
     ).first()
 
     if existing_request:
-        return Response({'error': 'Follow request already sent'}, status=status.HTTP_400_BAD_REQUEST)
+        if existing_request.status == 'PENDING':
+            # Even though request exists, make sure notification exists
+            notification = Notification.objects.filter(
+                user=user_to_follow,
+                title='New Follow Request',
+                message__contains=f'Request ID: {existing_request.id}'
+            ).first()
+            
+            if not notification:
+                # Create notification if it doesn't exist
+                Notification.objects.create(
+                    user=user_to_follow,
+                    title='New Follow Request',
+                    message=f'{request.user.get_full_name()} wants to follow you. Request ID: {existing_request.id}'
+                )
+            return Response({'error': 'Follow request already sent'}, status=status.HTTP_400_BAD_REQUEST)
+        elif existing_request.status == 'REJECTED':
+            # If request was previously rejected, update it to pending
+            existing_request.status = 'PENDING'
+            existing_request.save()
+            
+            # Create new notification for the target user
+            Notification.objects.create(
+                user=user_to_follow,
+                title='New Follow Request',
+                message=f'{request.user.get_full_name()} wants to follow you. Request ID: {existing_request.id}'
+            )
+            
+            return Response({'status': 'follow_request_sent'})
+        else:
+            # If request was accepted but no following relationship exists (cleanup)
+            existing_request.delete()
 
-    # Create follow request
-    follow_request = FollowRequest.objects.create(
-        from_user=request.user,
-        to_user=user_to_follow
-    )
+    # Create new follow request
+    try:
+        follow_request = FollowRequest.objects.create(
+            from_user=request.user,
+            to_user=user_to_follow,
+            status='PENDING'
+        )
+        print(f"Created follow request: {follow_request.id}")
 
-    # Create notification for the target user
-    Notification.objects.create(
-        user=user_to_follow,
-        title='New Follow Request',
-        message=f'{request.user.get_full_name()} wants to follow you',
-        notification_type='follow_request',
-        related_id=follow_request.id
-    )
+        # Create notification for the target user
+        notification = Notification.objects.create(
+            user=user_to_follow,
+            title='New Follow Request',
+            message=f'{request.user.get_full_name()} wants to follow you. Request ID: {follow_request.id}'
+        )
+        print(f"Created notification: {notification.id} for user: {user_to_follow.id}")
 
-    return Response({'status': 'follow_request_sent'})
+        return Response({'status': 'follow_request_sent'})
+    except Exception as e:
+        print(f"Error in follow_user: {str(e)}")
+        return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])
@@ -124,59 +163,106 @@ def handle_follow_request(request):
         return Response({'error': 'request_id and action are required'}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        follow_request = FollowRequest.objects.get(id=request_id, to_user=request.user, status='pending')
+        follow_request = FollowRequest.objects.get(id=request_id, to_user=request.user)
     except FollowRequest.DoesNotExist:
         return Response({'error': 'Follow request not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # Check if request is already handled
+    if follow_request.status != 'PENDING':
+        return Response({
+            'error': f'Follow request already {follow_request.status.lower()}',
+            'status': follow_request.status.lower()
+        }, status=status.HTTP_400_BAD_REQUEST)
+
     if action == 'accept':
-        # Create one-way follow relationship
-        UserFollowing.objects.get_or_create(user=follow_request.from_user, following_user=request.user)
-        
-        follow_request.status = 'accepted'
-        follow_request.save()
+        try:
+            # Create one-way follow relationship
+            UserFollowing.objects.get_or_create(
+                user=follow_request.from_user,
+                following_user=request.user
+            )
+            
+            follow_request.status = 'ACCEPTED'
+            follow_request.save()
 
-        # Notify the requester
-        Notification.objects.create(
-            user=follow_request.from_user,
-            title='Follow Request Accepted',
-            message=f'{request.user.get_full_name()} accepted your follow request',
-            notification_type='follow_accepted',
-            related_id=follow_request.id
-        )
+            # Notify the requester
+            Notification.objects.create(
+                user=follow_request.from_user,
+                title='Follow Request Accepted',
+                message=f'{request.user.get_full_name()} accepted your follow request. Request ID: {follow_request.id}'
+            )
 
-        return Response({'status': 'accepted'})
+            return Response({'status': 'accepted'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
     
     elif action == 'decline':
-        follow_request.status = 'declined'
-        follow_request.save()
+        try:
+            follow_request.status = 'REJECTED'
+            follow_request.save()
 
-        # Notify the requester
-        Notification.objects.create(
-            user=follow_request.from_user,
-            title='Follow Request Declined',
-            message=f'{request.user.get_full_name()} declined your follow request',
-            notification_type='follow_declined',
-            related_id=follow_request.id
-        )
+            # Notify the requester
+            Notification.objects.create(
+                user=follow_request.from_user,
+                title='Follow Request Declined',
+                message=f'{request.user.get_full_name()} declined your follow request. Request ID: {follow_request.id}'
+            )
 
-        return Response({'status': 'declined'})
+            return Response({'status': 'declined'})
+        except Exception as e:
+            return Response({'error': str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
     return Response({'error': 'Invalid action'}, status=status.HTTP_400_BAD_REQUEST)
 
 @api_view(['GET'])
 @permission_classes([permissions.IsAuthenticated])
 def get_notifications(request):
-    notifications = Notification.objects.filter(user=request.user)
-    data = [{
-        'id': n.id,
-        'title': n.title,
-        'message': n.message,
-        'type': n.notification_type,
-        'related_id': n.related_id,
-        'is_read': n.is_read,
-        'created_at': n.created_at
-    } for n in notifications]
-    return Response(data)
+    try:
+        print(f"Fetching notifications for user: {request.user.id} ({request.user.email})")
+        notifications = Notification.objects.filter(user=request.user).order_by('-created_at')
+        print(f"Found {notifications.count()} notifications")
+        
+        # Debug: Print each notification
+        for notif in notifications:
+            print(f"Notification {notif.id}: {notif.title} - {notif.message} - Created at: {notif.created_at}")
+        
+        # Add pagination
+        paginator = PageNumberPagination()
+        paginator.page_size = 10
+        paginated_notifications = paginator.paginate_queryset(notifications, request)
+        
+        if paginated_notifications is None:
+            print("No notifications after pagination")
+            return Response({
+                'results': [],
+                'next': None,
+                'previous': None,
+                'count': 0
+            })
+        
+        data = {
+            'results': [{
+                'id': n.id,
+                'title': n.title,
+                'message': n.message,
+                'is_read': n.is_read,
+                'created_at': n.created_at
+            } for n in paginated_notifications],
+            'next': paginator.get_next_link(),
+            'previous': paginator.get_previous_link(),
+            'count': notifications.count()
+        }
+        print(f"Returning {len(data['results'])} notifications")
+        print(f"Response data: {data}")
+        
+        return Response(data)
+    except Exception as e:
+        print(f"Error fetching notifications: {str(e)}")
+        print(f"Full error details: ", e.__dict__)
+        return Response(
+            {'error': f'Failed to fetch notifications: {str(e)}'}, 
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
 
 @api_view(['POST'])
 @permission_classes([permissions.IsAuthenticated])

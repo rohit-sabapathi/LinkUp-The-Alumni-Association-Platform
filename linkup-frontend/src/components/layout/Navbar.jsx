@@ -6,10 +6,10 @@ import {
     UsersIcon,
     CalendarIcon,
     ChatBubbleLeftRightIcon,
-    BellIcon,
     HeartIcon,
     LightBulbIcon
 } from '@heroicons/react/24/outline';
+import NotificationBell from '../notifications/NotificationBell';
 
 const Navbar = () => {
     const { user, logout } = useAuth();
@@ -38,19 +38,19 @@ const Navbar = () => {
                     </Link>
 
                     {/* Navigation Links */}
-                    <div className="flex items-center space-x-4">
+                    <div className="hidden md:flex space-x-4">
                         {navLinks.map((link) => (
                             <Link
                                 key={link.path}
                                 to={link.path}
-                                className={`flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                className={`flex items-center space-x-1 px-3 py-2 rounded-lg transition-colors ${
                                     isActive(link.path)
                                         ? 'bg-blue-600/20 text-blue-400'
                                         : 'text-slate-300 hover:bg-slate-700/50 hover:text-slate-100'
                                 }`}
                             >
-                                <link.icon className="h-5 w-5 mr-1.5" />
-                                {link.label}
+                                <link.icon className="h-5 w-5" />
+                                <span>{link.label}</span>
                             </Link>
                         ))}
                     </div>
@@ -67,9 +67,7 @@ const Navbar = () => {
                         >
                             <ChatBubbleLeftRightIcon className="h-6 w-6" />
                         </Link>
-                        <button className="p-2 text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 rounded-lg transition-colors">
-                            <BellIcon className="h-6 w-6" />
-                        </button>
+                        <NotificationBell />
                         <Link
                             to={`/profile/${user?.id}`}
                             className="flex items-center space-x-2 p-1.5 text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 rounded-lg transition-colors"
