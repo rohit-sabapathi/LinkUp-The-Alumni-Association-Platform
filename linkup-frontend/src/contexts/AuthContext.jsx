@@ -131,6 +131,7 @@ export const AuthProvider = ({ children }) => {
     register,
     logout,
     updateProfile,
+    setUser,
     isAdmin,
     isAlumni,
     isStudent,

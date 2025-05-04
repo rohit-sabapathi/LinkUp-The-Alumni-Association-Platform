@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import SkillsInput from '../common/SkillsInput';
+import GoogleAuth from './GoogleAuth';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -301,14 +302,23 @@ const Register = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white ${
-                loading
-                  ? 'bg-blue-400 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-              }`}
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
             >
               {loading ? 'Registering...' : 'Register'}
             </button>
+          </div>
+          
+          <div className="flex items-center justify-center">
+            <div className="w-full border-t border-slate-700"></div>
+            <div className="px-2 text-slate-400 text-sm">OR</div>
+            <div className="w-full border-t border-slate-700"></div>
+          </div>
+          
+          <div>
+            <GoogleAuth
+              buttonText="Sign up with Google"
+              className="w-full py-2 px-4 border border-slate-700 rounded-md text-sm font-medium text-slate-200 bg-slate-800 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            />
           </div>
         </form>
       </div>

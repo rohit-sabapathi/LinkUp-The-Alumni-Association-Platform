@@ -15,6 +15,7 @@ from .views import (
     mark_notification_read,
     get_follow_request_status,
 )
+from .google_auth import google_auth
 
 urlpatterns = [
     path('login/', CustomTokenObtainPairView.as_view(), name='login'),
@@ -31,4 +32,5 @@ urlpatterns = [
     path('follow-request/status/<int:user_id>/', get_follow_request_status, name='follow-request-status'),
     path('notifications/', get_notifications, name='get-notifications'),
     path('notifications/<int:notification_id>/read/', mark_notification_read, name='mark-notification-read'),
+    path('google/', google_auth, name='google-auth'),
 ]

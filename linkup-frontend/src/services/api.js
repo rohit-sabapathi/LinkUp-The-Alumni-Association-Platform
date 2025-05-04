@@ -100,6 +100,9 @@ export const authAPI = {
 
   refreshToken: (refreshToken) =>
     api.post('/auth/refresh/', { refresh: refreshToken }),
+    
+  googleAuth: (accessToken) =>
+    api.post('/auth/google/', { access_token: accessToken }),
 };
 
 export const userAPI = {

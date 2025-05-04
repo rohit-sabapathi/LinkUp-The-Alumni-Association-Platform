@@ -24,9 +24,18 @@ urlpatterns = [
     path('api/auth/', include('authentication.urls')),
     path('api/posts/', include('posts.urls')),
     path('api/jobs/', include('jobs.urls')),
-    path('api/events/', include('events.urls')),
     path('api/chat/', include('chat.urls')),
+    path('api/events/', include('events.urls')),
     path('api/preferences/', include('preferences.urls')),
     path('api/donations/', include('donations.urls')),
     path('api/projects/', include('projects.urls')),
-] + static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+    
+    # Django allauth URLs
+    path('accounts/', include('allauth.urls')),
+    path('api/auth/dj-rest-auth/', include('dj_rest_auth.urls')),
+    path('api/auth/dj-rest-auth/registration/', include('dj_rest_auth.registration.urls')),
+]
+
+# Serve media files in development
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
