@@ -5,7 +5,8 @@ from .models import (
     ProjectMember, 
     JoinRequest,
     ResourceCategory,
-    Resource
+    Resource,
+    ProjectInvitation
 )
 
 class ProjectMemberInline(admin.TabularInline):
@@ -48,6 +49,14 @@ class ProjectMemberAdmin(admin.ModelAdmin):
 class JoinRequestAdmin(admin.ModelAdmin):
     list_display = ('user', 'project', 'status', 'created_at')
     list_filter = ('status', 'created_at')
+    search_fields = ('user__username', 'project__title', 'message')
+    readonly_fields = ('id', 'created_at', 'updated_at')
+    date_hierarchy = 'created_at'
+
+@admin.register(ProjectInvitation)
+class ProjectInvitationAdmin(admin.ModelAdmin):
+    list_display = ('user', 'project', 'invited_by', 'role', 'status', 'created_at')
+    list_filter = ('status', 'role', 'created_at')
     search_fields = ('user__username', 'project__title', 'message')
     readonly_fields = ('id', 'created_at', 'updated_at')
     date_hierarchy = 'created_at'

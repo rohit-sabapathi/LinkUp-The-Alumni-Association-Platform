@@ -5,11 +5,13 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework import serializers
 from datetime import datetime
+from django.contrib.auth import get_user_model
 
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
-    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask
+    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask,
+    ProjectInvitation
 )
 from .serializers import (
     ProjectListSerializer, 
@@ -41,8 +43,14 @@ from .serializers import (
     ProgressLogSerializer,
     ProgressLogCreateSerializer,
     ProgressLogListSerializer,
-    ProgressLogTaskSerializer
+    ProgressLogTaskSerializer,
+    # Project Invitation Serializers
+    ProjectInvitationSerializer,
+    ProjectInvitationCreateSerializer,
+    ProjectInvitationStatusUpdateSerializer
 )
+
+User = get_user_model()
 
 class ProjectViewSet(viewsets.ModelViewSet):
     """
@@ -238,6 +246,146 @@ class ProjectViewSet(viewsets.ModelViewSet):
         serializer = ProjectMemberSerializer(members, many=True)
         return Response(serializer.data)
 
+    @action(detail=True, methods=['get'])
+    def suggested_users(self, request, pk=None):
+        """
+        Get users with skills matching the project's required skills
+        """
+        project = self.get_object()
+        
+        # Check if the user is a member or creator of the project
+        is_creator = (project.creator.id == request.user.id)
+        is_member = ProjectMember.objects.filter(
+            project=project, 
+            user=request.user
+        ).exists()
+        
+        if not (is_creator or is_member):
+            return Response(
+                {"detail": "You don't have permission to access this project's suggested users"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # If no skills are defined, return empty list
+        if not project.skills or len(project.skills) == 0:
+            return Response([])
+            
+        # Find users with at least one matching skill
+        matching_users = User.objects.filter(
+            skills__name__in=project.skills
+        ).exclude(
+            id__in=ProjectMember.objects.filter(project=project).values_list('user_id', flat=True)
+        ).distinct()
+        
+        # Create a serialized response with skill matching info
+        result = []
+        for user in matching_users:
+            user_skills = list(user.skills.values_list('name', flat=True))
+            matching_skills = [skill for skill in user_skills if skill in project.skills]
+            
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'full_name': f"{user.first_name} {user.last_name}".strip(),
+                'profile_picture': user.profile_picture.url if user.profile_picture else None,
+                'skills': user_skills,
+                'matching_skills': matching_skills,
+                'matching_skill_count': len(matching_skills)
+            }
+            result.append(user_data)
+        
+        # Sort by the number of matching skills (descending)
+        result.sort(key=lambda x: x['matching_skill_count'], reverse=True)
+        
+        return Response(result)
+        
+    @action(detail=True, methods=['get'])
+    def all_users(self, request, pk=None):
+        """
+        Get all users who are not members of the project
+        """
+        project = self.get_object()
+        
+        # Check if the user is a member or creator of the project
+        is_creator = (project.creator.id == request.user.id)
+        is_member = ProjectMember.objects.filter(
+            project=project, 
+            user=request.user
+        ).exists()
+        
+        if not (is_creator or is_member):
+            return Response(
+                {"detail": "You don't have permission to access this project's user list"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Get all users who are not already members
+        users = User.objects.exclude(
+            id__in=ProjectMember.objects.filter(project=project).values_list('user_id', flat=True)
+        )
+        
+        # Create a serialized response
+        result = []
+        for user in users:
+            user_skills = list(user.skills.values_list('name', flat=True))
+            matching_skills = [skill for skill in user_skills if skill in project.skills]
+            
+            user_data = {
+                'id': user.id,
+                'username': user.username,
+                'full_name': f"{user.first_name} {user.last_name}".strip(),
+                'profile_picture': user.profile_picture.url if user.profile_picture else None,
+                'skills': user_skills,
+                'matching_skills': matching_skills,
+                'matching_skill_count': len(matching_skills)
+            }
+            result.append(user_data)
+        
+        return Response(result)
+    
+    @action(detail=True, methods=['post'])
+    def invite_user(self, request, pk=None):
+        """
+        Invite a user to join a project
+        """
+        project = self.get_object()
+        
+        # Check if the user is a member or creator of the project
+        is_creator = (project.creator.id == request.user.id)
+        is_admin = ProjectMember.objects.filter(
+            project=project, 
+            user=request.user,
+            role='admin'
+        ).exists()
+        
+        if not (is_creator or is_admin):
+            return Response(
+                {"detail": "You don't have permission to invite users to this project"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Use the create serializer with the request context
+        serializer = ProjectInvitationCreateSerializer(
+            data={**request.data, 'project': project.id},
+            context={'request': request}
+        )
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            invitation = serializer.save()
+            
+            # Return the full serialized invitation
+            return Response(
+                ProjectInvitationSerializer(invitation).data,
+                status=status.HTTP_201_CREATED
+            )
+        except serializers.ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"detail": f"Error creating invitation: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 class JoinRequestViewSet(viewsets.GenericViewSet):
     """
@@ -1219,3 +1367,93 @@ class CurrentWeekProgressLogView(generics.RetrieveAPIView):
         )
         
         return progress_log 
+
+class ProjectInvitationViewSet(viewsets.GenericViewSet):
+    """
+    ViewSet for managing project invitations
+    """
+    queryset = ProjectInvitation.objects.all()
+    serializer_class = ProjectInvitationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    @action(detail=True, methods=['patch'])
+    def update_status(self, request, pk=None):
+        """
+        Update the status of a project invitation (accept or reject)
+        """
+        invitation = self.get_object()
+        user = request.user
+        
+        # Check if the user is the recipient of the invitation
+        if invitation.user.id != user.id:
+            return Response(
+                {"detail": "You can only respond to invitations sent to you"}, 
+                status=status.HTTP_403_FORBIDDEN
+            )
+        
+        # Use the status update serializer
+        serializer = ProjectInvitationStatusUpdateSerializer(
+            invitation, data=request.data, partial=True
+        )
+        
+        try:
+            serializer.is_valid(raise_exception=True)
+            updated_invitation = serializer.save()
+            
+            # Return the updated invitation
+            return Response(
+                ProjectInvitationSerializer(updated_invitation).data,
+                status=status.HTTP_200_OK
+            )
+        except serializers.ValidationError as e:
+            return Response(e.detail, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"detail": f"Error updating invitation status: {str(e)}"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
+    def get_queryset(self):
+        # Default behavior - return invitations related to the user
+        queryset = self.queryset.filter(user=self.request.user)
+        
+        # Filter by status if provided
+        status_param = self.request.query_params.get('status', None)
+        if status_param:
+            queryset = queryset.filter(status=status_param)
+            
+        return queryset
+
+class UserInvitationsView(generics.ListAPIView):
+    """
+    View for listing user's project invitations
+    """
+    serializer_class = ProjectInvitationSerializer
+    permission_classes = [permissions.IsAuthenticated]
+    
+    def get_queryset(self):
+        # Get invitations sent to the user
+        return ProjectInvitation.objects.filter(user=self.request.user)
+    
+    def list(self, request, *args, **kwargs):
+        queryset = self.get_queryset()
+        
+        # Convert the queryset objects to a list of dictionaries
+        invitations_data = []
+        for invitation in queryset:
+            # Get additional data about the project
+            project_data = {
+                'id': invitation.project.id,
+                'title': invitation.project.title,
+                'short_description': invitation.project.short_description,
+                'project_type': invitation.project.project_type,
+                'skills': invitation.project.skills
+            }
+            
+            # Add project data to the invitation
+            invitation_data = ProjectInvitationSerializer(invitation).data
+            invitation_data['project_data'] = project_data
+            
+            invitations_data.append(invitation_data)
+        
+        return Response(invitations_data) 

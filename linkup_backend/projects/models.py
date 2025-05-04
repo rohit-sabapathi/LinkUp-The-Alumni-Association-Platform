@@ -139,6 +139,45 @@ class JoinRequest(models.Model):
     def __str__(self):
         return f"Request from {self.user.username} for {self.project.title} - {self.status}"
 
+class ProjectInvitation(models.Model):
+    """
+    Model to track invitations sent to users to join a project
+    """
+    STATUS_CHOICES = (
+        ('pending', 'Pending'),
+        ('accepted', 'Accepted'),
+        ('rejected', 'Rejected'),
+    )
+    
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    project = models.ForeignKey(
+        Project,
+        on_delete=models.CASCADE,
+        related_name='invitations'
+    )
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='project_invitations'
+    )
+    message = models.TextField(blank=True, null=True, help_text="Invitation message")
+    role = models.CharField(max_length=20, choices=ProjectMember.ROLES, default='member')
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='sent_invitations'
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('project', 'user')
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"Invitation to {self.user.username} for {self.project.title} - {self.status}"
+
 class ResourceCategory(models.Model):
     """
     Model for organizing resources within workspaces into categories

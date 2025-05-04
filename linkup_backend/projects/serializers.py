@@ -3,7 +3,8 @@ from django.contrib.auth import get_user_model
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
-    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask
+    Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask,
+    ProjectInvitation
 )
 
 User = get_user_model()
@@ -640,4 +641,119 @@ class ProgressLogListSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'user', 'created_at']
     
     def get_tasks_count(self, obj):
-        return obj.tasks.count() 
+        return obj.tasks.count()
+
+class ProjectInvitationSerializer(serializers.ModelSerializer):
+    user = UserMiniSerializer(read_only=True)
+    invited_by = UserMiniSerializer(read_only=True)
+    project_title = serializers.CharField(source='project.title', read_only=True)
+    
+    class Meta:
+        model = ProjectInvitation
+        fields = ['id', 'project', 'project_title', 'user', 'message', 'role', 'invited_by', 'status', 'created_at']
+        read_only_fields = ['id', 'status', 'created_at', 'project_title', 'invited_by']
+
+class ProjectInvitationCreateSerializer(serializers.ModelSerializer):
+    user_id = serializers.UUIDField(write_only=True)
+    
+    class Meta:
+        model = ProjectInvitation
+        fields = ['project', 'user_id', 'message', 'role']
+        
+    def validate_user_id(self, value):
+        User = get_user_model()
+        try:
+            user = User.objects.get(id=value)
+            return value
+        except User.DoesNotExist:
+            raise serializers.ValidationError(f"User with ID {value} does not exist")
+    
+    def validate(self, data):
+        project = data.get('project')
+        user_id = data.get('user_id')
+        User = get_user_model()
+        
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            raise serializers.ValidationError({"user_id": "User does not exist"})
+        
+        # Check if user is already a member
+        if ProjectMember.objects.filter(project=project, user=user).exists():
+            raise serializers.ValidationError(
+                {"user_id": "User is already a member of this project"}
+            )
+        
+        # Check if there's already a pending invitation
+        if ProjectInvitation.objects.filter(
+            project=project, 
+            user=user,
+            status='pending'
+        ).exists():
+            raise serializers.ValidationError(
+                {"user_id": "An invitation for this user is already pending"}
+            )
+        
+        return data
+        
+    def create(self, validated_data):
+        user_id = validated_data.pop('user_id')
+        invited_by = self.context['request'].user
+        User = get_user_model()
+        
+        # Get the user object
+        user = User.objects.get(id=user_id)
+        
+        # Create the invitation
+        return ProjectInvitation.objects.create(
+            user=user,
+            invited_by=invited_by,
+            **validated_data
+        )
+
+class ProjectInvitationStatusUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectInvitation
+        fields = ['status']
+        
+    def validate_status(self, value):
+        valid_transitions = {
+            'pending': ['accepted', 'rejected'],
+            'accepted': ['rejected'],
+            'rejected': ['accepted']
+        }
+        
+        current_status = self.instance.status
+        if value not in valid_transitions.get(current_status, []):
+            raise serializers.ValidationError(
+                f"Cannot transition from '{current_status}' to '{value}'"
+            )
+        return value
+        
+    def update(self, instance, validated_data):
+        new_status = validated_data.get('status')
+        old_status = instance.status
+        
+        # Update the invitation status
+        instance.status = new_status
+        instance.save()
+        
+        # If status changed to accepted, create project membership
+        if old_status != 'accepted' and new_status == 'accepted':
+            # Check if there's space on the team
+            project = instance.project
+            current_members = project.members.count()
+            
+            if current_members >= project.max_team_members:
+                raise serializers.ValidationError(
+                    "Cannot accept invitation: maximum number of team members reached"
+                )
+            
+            # Create the membership
+            ProjectMember.objects.create(
+                project=project,
+                user=instance.user,
+                role=instance.role
+            )
+            
+        return instance 

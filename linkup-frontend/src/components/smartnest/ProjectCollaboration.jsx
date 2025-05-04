@@ -25,7 +25,9 @@ import {
   fetchUserJoinRequests,
   fetchProjectJoinRequests,
   updateJoinRequestStatus,
-  fetchUserWorkspaces
+  fetchUserWorkspaces,
+  fetchUserInvitations,
+  respondToInvitation
 } from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -74,6 +76,10 @@ const ProjectCollaboration = () => {
 
   // Add this import at the top to get the current user ID from auth state
   const { user: currentUser } = useAuth();
+
+  // Add state for project invitations
+  const [invitations, setInvitations] = useState([]);
+  const [respondingInvitation, setRespondingInvitation] = useState(null);
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -283,6 +289,26 @@ const ProjectCollaboration = () => {
       }
     }
   }, [activeTab, userProjects.length]); // Only depend on length to avoid excessive rerenders
+
+  // Fetch user's invitations
+  useEffect(() => {
+    if (activeTab === 'request-status') {
+      const fetchInvitationsData = async () => {
+        setLoading(true);
+        try {
+          const invitationsData = await fetchUserInvitations();
+          setInvitations(invitationsData);
+        } catch (error) {
+          console.error('Error fetching invitations:', error);
+          toast.error('Failed to load project invitations');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      fetchInvitationsData();
+    }
+  }, [activeTab]);
 
   const tabs = [
     { id: 'projects', label: 'Projects' },
@@ -539,6 +565,60 @@ const ProjectCollaboration = () => {
       expertise: '',
       motivation: ''
     });
+  };
+
+  // Handle responding to an invitation
+  const handleInvitationResponse = async (invitationId, status) => {
+    setRespondingInvitation(invitationId);
+    try {
+      await respondToInvitation(invitationId, status);
+      
+      // Update the status in the UI
+      setInvitations(prevInvitations => 
+        prevInvitations.map(invitation => 
+          invitation.id === invitationId 
+            ? { ...invitation, status } 
+            : invitation
+        )
+      );
+      
+      // If accepted, refresh the workspaces
+      if (status === 'accepted') {
+        toast.success('Invitation accepted! You are now a member of the project.');
+        // Refresh the user projects and workspaces
+        try {
+          const userProjectsData = await fetchUserProjects();
+          setUserProjects(userProjectsData);
+          
+          // Extract workspaces from the projects
+          const workspacePromises = userProjectsData.map(async project => {
+            if (project.workspace) {
+              return {
+                id: project.workspace.id,
+                title: project.workspace.title || project.title,
+                description: project.workspace.description || project.short_description,
+                slug: project.workspace.slug,
+                project_id: project.id,
+                created_at: project.workspace.created_at || project.created_at
+              };
+            }
+            return null;
+          });
+          
+          const workspacesData = (await Promise.all(workspacePromises)).filter(Boolean);
+          setWorkspaces(workspacesData);
+        } catch (error) {
+          console.error('Error refreshing data after accepting invitation:', error);
+        }
+      } else {
+        toast.success('Invitation declined.');
+      }
+    } catch (error) {
+      console.error('Error responding to invitation:', error);
+      toast.error('Failed to process your response');
+    } finally {
+      setRespondingInvitation(null);
+    }
   };
 
   // Render project details view
@@ -1250,6 +1330,163 @@ const ProjectCollaboration = () => {
               </div>
             ) : (
               <>
+                {/* Project Invitations */}
+                <div>
+                  <h2 className="text-xl font-bold text-slate-100 mb-4">Project Invitations</h2>
+                  
+                  {invitations.length > 0 ? (
+                    <div className="space-y-4">
+                      {invitations.map(invitation => (
+                        <div 
+                          key={invitation.id} 
+                          className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-hidden"
+                        >
+                          <div className="p-4 border-b border-slate-700 flex justify-between items-center">
+                            <div>
+                              <span className="text-slate-400 text-sm">Invitation to join</span>
+                              <h3 className="text-lg font-medium text-slate-200">{invitation.project_data.title}</h3>
+                            </div>
+                            <div>
+                              {invitation.status === 'pending' ? (
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => handleInvitationResponse(invitation.id, 'accepted')}
+                                    className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center"
+                                    disabled={respondingInvitation === invitation.id}
+                                  >
+                                    {respondingInvitation === invitation.id ? (
+                                      <span className="flex items-center">
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                        Processing...
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <CheckIcon className="w-4 h-4 mr-1" />
+                                        Accept
+                                      </>
+                                    )}
+                                  </button>
+                                  <button
+                                    onClick={() => handleInvitationResponse(invitation.id, 'rejected')}
+                                    className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center"
+                                    disabled={respondingInvitation === invitation.id}
+                                  >
+                                    {respondingInvitation === invitation.id ? (
+                                      <span className="flex items-center">
+                                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                        Processing...
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <XIcon className="w-4 h-4 mr-1" />
+                                        Decline
+                                      </>
+                                    )}
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                  invitation.status === 'accepted' 
+                                    ? 'bg-green-900/30 text-green-400' 
+                                    : 'bg-red-900/30 text-red-400'
+                                }`}>
+                                  {invitation.status === 'accepted' ? 'Accepted' : 'Declined'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="p-4 grid md:grid-cols-2 gap-4">
+                            <div>
+                              <div className="flex items-center mb-3">
+                                <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                                  {invitation.invited_by.profile_picture ? (
+                                    <img 
+                                      src={invitation.invited_by.profile_picture}
+                                      alt={invitation.invited_by.username}
+                                      className="w-10 h-10 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    invitation.invited_by.username.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-slate-200 font-medium">
+                                    {invitation.invited_by.full_name || invitation.invited_by.username}
+                                  </div>
+                                  <div className="text-slate-500 text-sm">
+                                    Invited you {new Date(invitation.created_at).toLocaleDateString()}
+                                  </div>
+                                </div>
+                              </div>
+                              
+                              {invitation.message && (
+                                <div className="mb-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Message</h4>
+                                  <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
+                                    {invitation.message}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
+                            
+                            <div>
+                              <div className="mb-3">
+                                <h4 className="text-sm font-medium text-slate-400 mb-1">Project Type</h4>
+                                <p className="text-indigo-400 font-medium">
+                                  {invitation.project_data.project_type}
+                                </p>
+                              </div>
+                              
+                              {invitation.project_data.skills && invitation.project_data.skills.length > 0 && (
+                                <div className="mb-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Project Skills</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {invitation.project_data.skills.map((skill, idx) => (
+                                      <span 
+                                        key={idx} 
+                                        className="bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded-full text-xs"
+                                      >
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              <div>
+                                <h4 className="text-sm font-medium text-slate-400 mb-1">Your Role</h4>
+                                <p className="text-slate-300 capitalize">
+                                  {invitation.role}
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="p-4 border-t border-slate-700">
+                            <button
+                              onClick={() => {
+                                const project = {
+                                  id: invitation.project
+                                };
+                                viewProjectDetails(project);
+                              }}
+                              className="text-indigo-400 hover:text-indigo-300 text-sm flex items-center"
+                            >
+                              <ArrowTopRightOnSquareIcon className="w-4 h-4 mr-1" />
+                              View Project Details
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="bg-slate-800/30 rounded-xl border border-slate-700 p-8 text-center">
+                      <p className="text-slate-400">You don't have any project invitations.</p>
+                    </div>
+                  )}
+                </div>
+                
                 {/* Requests Sent */}
                 <div>
                   <h2 className="text-xl font-bold text-slate-100 mb-4">Your Collaboration Requests</h2>
@@ -1321,104 +1558,7 @@ const ProjectCollaboration = () => {
                       <div className="space-y-6">
                         {receivedJoinRequests.map(request => (
                           <div key={request.id} className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-hidden">
-                            <div className="p-4 border-b border-slate-700 flex justify-between items-center">
-                              <div>
-                                <span className="text-slate-400 text-sm">Request for</span>
-                                <h3 className="text-lg font-medium text-slate-200">{request.project_title}</h3>
-                              </div>
-                              <div>
-                                {request.status === 'pending' ? (
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => handleRequestStatusUpdate(request.id, 'accepted')}
-                                      className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded-lg flex items-center"
-                                      disabled={loading}
-                                    >
-                                      <CheckIcon className="w-4 h-4 mr-1" />
-                                      Accept
-                                    </button>
-                                    <button
-                                      onClick={() => handleRequestStatusUpdate(request.id, 'rejected')}
-                                      className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded-lg flex items-center"
-                                      disabled={loading}
-                                    >
-                                      <XIcon className="w-4 h-4 mr-1" />
-                                      Decline
-                                    </button>
-                                  </div>
-                                ) : (
-                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                                    request.status === 'accepted' 
-                                      ? 'bg-green-900/30 text-green-400' 
-                                      : 'bg-red-900/30 text-red-400'
-                                  }`}>
-                                    {request.status === 'accepted' ? 'Accepted' : 'Declined'}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                            
-                            <div className="p-4 grid md:grid-cols-2 gap-4">
-                              <div>
-                                <div className="flex items-center mb-3">
-                                  <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
-                                    {request.user.username.charAt(0).toUpperCase()}
-                                  </div>
-                                  <div>
-                                    <div 
-                                      className="text-slate-200 font-medium cursor-pointer hover:text-indigo-400"
-                                      onClick={() => navigate(`/profile/${request.user.username}`)}
-                                    >
-                                      {request.user.full_name || request.user.username}
-                                    </div>
-                                    <div className="text-slate-500 text-sm">
-                                      Requested {new Date(request.created_at).toLocaleDateString()}
-                                    </div>
-                                  </div>
-                                </div>
-                                
-                                <div className="mb-3">
-                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Motivation</h4>
-                                  <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
-                                    {request.motivation || "No motivation provided"}
-                                  </p>
-                                </div>
-                              </div>
-                              
-                              <div>
-                                <div className="mb-3">
-                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Expertise</h4>
-                                  <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
-                                    {request.expertise || "No expertise details provided"}
-                                  </p>
-                                </div>
-                                
-                                {request.skills && request.skills.length > 0 && (
-                                  <div className="mb-3">
-                                    <h4 className="text-sm font-medium text-slate-400 mb-1">Skills</h4>
-                                    <div className="flex flex-wrap gap-2">
-                                      {request.skills.map((skill, idx) => (
-                                        <span 
-                                          key={idx} 
-                                          className="bg-indigo-900/30 text-indigo-300 px-2 py-0.5 rounded-full text-xs"
-                                        >
-                                          {skill}
-                                        </span>
-                                      ))}
-                                    </div>
-          </div>
-        )}
-                                
-                                {request.message && (
-                                  <div>
-                                    <h4 className="text-sm font-medium text-slate-400 mb-1">Additional Message</h4>
-                                    <p className="text-slate-300 bg-slate-800/50 p-3 rounded-lg text-sm">
-                                      {request.message}
-                                    </p>
-                                  </div>
-                                )}
-                              </div>
-                            </div>
+                            {/* ... existing code ... */}
                           </div>
                         ))}
                       </div>

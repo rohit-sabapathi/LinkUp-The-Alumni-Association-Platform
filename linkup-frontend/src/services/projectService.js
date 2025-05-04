@@ -348,12 +348,75 @@ export const uploadResource = async (resourceData) => {
 
 export const deleteResource = async (resourceId) => {
   try {
-    await axios.delete(`${API_URL}/resources/${resourceId}/`, {
+    const response = await axios.delete(`${API_URL}/resources/${resourceId}/`, {
       headers: getAuthHeader()
     });
-    return true;
+    return response.data;
   } catch (error) {
     console.error('Error deleting resource:', error);
     throw error.response?.data || { detail: 'Failed to delete resource' };
+  }
+};
+
+// Project invitation functions
+export const fetchSuggestedUsers = async (projectId) => {
+  try {
+    const response = await axios.get(`${API_URL}/${projectId}/suggested_users/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching suggested users:', error);
+    throw error.response?.data || { detail: 'Failed to fetch suggested users' };
+  }
+};
+
+export const fetchAllUsers = async (projectId) => {
+  try {
+    const response = await axios.get(`${API_URL}/${projectId}/all_users/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching all users:', error);
+    throw error.response?.data || { detail: 'Failed to fetch users' };
+  }
+};
+
+export const inviteUserToProject = async (projectId, userData) => {
+  try {
+    const response = await axios.post(`${API_URL}/${projectId}/invite_user/`, 
+      userData,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error inviting user:', error);
+    throw error.response?.data || { detail: 'Failed to invite user' };
+  }
+};
+
+export const fetchUserInvitations = async () => {
+  try {
+    const response = await axios.get(`${API_URL}/user/invitations/`, {
+      headers: getAuthHeader()
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching user invitations:', error);
+    throw error.response?.data || { detail: 'Failed to fetch invitations' };
+  }
+};
+
+export const respondToInvitation = async (invitationId, status) => {
+  try {
+    const response = await axios.patch(`${API_URL}/project-invitations/${invitationId}/update_status/`, 
+      { status },
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error responding to invitation:', error);
+    throw error.response?.data || { detail: 'Failed to respond to invitation' };
   }
 }; 

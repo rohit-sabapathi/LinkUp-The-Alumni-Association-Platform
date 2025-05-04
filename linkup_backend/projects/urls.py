@@ -20,7 +20,10 @@ from .views import (
     ProgressLogViewSet,
     WorkspaceProgressLogsView,
     UserProgressLogsView,
-    CurrentWeekProgressLogView
+    CurrentWeekProgressLogView,
+    # Project invitation views
+    ProjectInvitationViewSet,
+    UserInvitationsView
 )
 
 router = DefaultRouter()
@@ -34,12 +37,15 @@ router.register(r'tasks', TaskViewSet, basename='task')
 router.register(r'task-comments', TaskCommentViewSet, basename='task-comment')
 # Register Progress Log endpoints
 router.register(r'progress-logs', ProgressLogViewSet, basename='progress-log')
+# Register Project Invitation endpoints
+router.register(r'project-invitations', ProjectInvitationViewSet, basename='project-invitation')
 router.register(r'', ProjectViewSet, basename='project')
 
 urlpatterns = [
     path('', include(router.urls)),
     path('user/projects/', UserProjectsView.as_view(), name='user-projects'),
     path('user/join-requests/', UserJoinRequestsView.as_view(), name='user-join-requests'),
+    path('user/invitations/', UserInvitationsView.as_view(), name='user-invitations'),
     path('user/workspaces/', UserWorkspacesView.as_view(), name='user-workspaces'),
     path('user/progress-logs/', UserProgressLogsView.as_view(), name='user-progress-logs'),
     path('workspace/<slug:slug>/', WorkspaceDetailView.as_view(), name='workspace-detail'),

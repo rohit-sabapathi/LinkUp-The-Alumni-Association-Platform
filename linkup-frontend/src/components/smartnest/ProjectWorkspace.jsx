@@ -14,7 +14,10 @@ import {
   ChevronDoubleLeftIcon,
   ChevronDoubleRightIcon,
   ChevronRightIcon,
-  ChevronLeftIcon
+  ChevronLeftIcon,
+  XMarkIcon,
+  UserPlusIcon,
+  CheckIcon
 } from '@heroicons/react/24/outline';
 import { toast } from 'react-hot-toast';
 
@@ -22,7 +25,14 @@ import ResourceSharing from '../resources/ResourceSharing';
 import KanbanBoard from '../kanban/KanbanBoard';
 import ProgressLogs from '../progress/ProgressLogs';
 import ProjectGanttChart from '../gantt/ProjectGanttChart';
-import { fetchWorkspaceBySlug, fetchProjectMembers } from '../../services/projectService';
+import { 
+  fetchWorkspaceBySlug, 
+  fetchProjectMembers, 
+  fetchSuggestedUsers, 
+  fetchAllUsers, 
+  inviteUserToProject,
+  fetchProjectById
+} from '../../services/projectService';
 
 // Custom ErrorBoundary to handle chat errors
 class ErrorBoundary extends React.Component {
@@ -65,6 +75,14 @@ const ProjectWorkspace = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  
+  // Invite modal state
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [inviteTab, setInviteTab] = useState('suggested');
+  const [suggestedUsers, setSuggestedUsers] = useState([]);
+  const [allUsers, setAllUsers] = useState([]);
+  const [inviteLoading, setInviteLoading] = useState(false);
+  const [invitingUser, setInvitingUser] = useState(null);
 
   // Fetch workspace data
   useEffect(() => {
@@ -114,6 +132,65 @@ const ProjectWorkspace = () => {
       fetchWorkspaceData();
     }
   }, [workspaceSlug]);
+  
+  // Fetch suggested users and all users when invite modal is opened
+  useEffect(() => {
+    const fetchUsersForInvite = async () => {
+      if (showInviteModal && project) {
+        setInviteLoading(true);
+        try {
+          // Fetch suggested users (with matching skills)
+          const suggestedData = await fetchSuggestedUsers(project);
+          setSuggestedUsers(suggestedData);
+          
+          // Fetch all users
+          const allUsersData = await fetchAllUsers(project);
+          setAllUsers(allUsersData);
+        } catch (error) {
+          console.error('Error fetching users for invitation:', error);
+          toast.error('Failed to load users for invitation');
+        } finally {
+          setInviteLoading(false);
+        }
+      }
+    };
+    
+    fetchUsersForInvite();
+  }, [showInviteModal, project]);
+
+  const handleInviteUser = async (userId) => {
+    setInvitingUser(userId);
+    try {
+      const response = await inviteUserToProject(project, {
+        user_id: userId,
+        message: `You're invited to join the project: ${workspace.title}`,
+        role: 'member'
+      });
+      
+      toast.success('Invitation sent successfully!');
+      
+      // Remove the invited user from the lists
+      setSuggestedUsers(prev => prev.filter(user => user.id !== userId));
+      setAllUsers(prev => prev.filter(user => user.id !== userId));
+    } catch (error) {
+      console.error('Error inviting user:', error);
+      toast.error(error.detail || 'Failed to send invitation');
+    } finally {
+      setInvitingUser(null);
+    }
+  };
+  
+  const openInviteModal = () => {
+    setShowInviteModal(true);
+    setInviteTab('suggested');
+  };
+  
+  const closeInviteModal = () => {
+    setShowInviteModal(false);
+    setInviteTab('suggested');
+    setSuggestedUsers([]);
+    setAllUsers([]);
+  };
 
   if (loading) {
     return (
@@ -261,7 +338,11 @@ const ProjectWorkspace = () => {
             {tabs.find(tab => tab.id === activeTab)?.label}
           </h2>
           <div>
-            <button className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors text-sm">
+            <button 
+              onClick={openInviteModal}
+              className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors text-sm flex items-center"
+            >
+              <UserPlusIcon className="w-4 h-4 mr-1" />
               Invite Members
             </button>
           </div>
@@ -365,6 +446,207 @@ const ProjectWorkspace = () => {
           )}
         </div>
       </div>
+      
+      {/* Invite Members Modal */}
+      {showInviteModal && (
+        <div className="fixed inset-0 bg-black/75 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 rounded-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+              <h3 className="text-xl font-semibold text-slate-100">Invite Members</h3>
+              <button 
+                onClick={closeInviteModal}
+                className="p-1 rounded-full hover:bg-slate-700"
+              >
+                <XMarkIcon className="w-6 h-6 text-slate-400" />
+              </button>
+            </div>
+            
+            {/* Tabs Navigation */}
+            <div className="border-b border-slate-700">
+              <nav className="flex">
+                <button
+                  onClick={() => setInviteTab('suggested')}
+                  className={`py-3 px-6 font-medium text-sm ${
+                    inviteTab === 'suggested'
+                      ? 'border-b-2 border-indigo-500 text-indigo-400'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  Suggested Users
+                </button>
+                <button
+                  onClick={() => setInviteTab('all')}
+                  className={`py-3 px-6 font-medium text-sm ${
+                    inviteTab === 'all'
+                      ? 'border-b-2 border-indigo-500 text-indigo-400'
+                      : 'text-slate-400 hover:text-slate-200'
+                  }`}
+                >
+                  All Users
+                </button>
+              </nav>
+            </div>
+            
+            {/* Tab Content */}
+            <div className="p-6">
+              {inviteLoading ? (
+                <div className="flex justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-indigo-500"></div>
+                </div>
+              ) : (
+                <>
+                  {/* Suggested Users Tab */}
+                  {inviteTab === 'suggested' && (
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-lg font-medium text-slate-200">Users with Matching Skills</h4>
+                        <span className="text-sm text-slate-400">
+                          {suggestedUsers.length} user{suggestedUsers.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {suggestedUsers.length > 0 ? (
+                        <div className="space-y-3">
+                          {suggestedUsers.map(user => (
+                            <div 
+                              key={user.id} 
+                              className="flex justify-between items-center p-4 border border-slate-700 rounded-lg hover:bg-slate-700/30"
+                            >
+                              <div className="flex items-center">
+                                <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                                  {user.profile_picture ? (
+                                    <img 
+                                      src={user.profile_picture} 
+                                      alt={user.username} 
+                                      className="w-10 h-10 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    user.username.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-slate-200 font-medium">
+                                    {user.full_name || user.username}
+                                  </div>
+                                  <div className="text-slate-500 text-sm">
+                                    {user.matching_skill_count} skill{user.matching_skill_count !== 1 ? 's' : ''} match
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="flex items-center">
+                                <div className="flex mr-4">
+                                  {user.matching_skills.slice(0, 3).map((skill, idx) => (
+                                    <span 
+                                      key={idx} 
+                                      className="mr-1 bg-indigo-900/30 text-indigo-300 px-2 py-0.5 text-xs rounded-full"
+                                    >
+                                      {skill}
+                                    </span>
+                                  ))}
+                                  {user.matching_skills.length > 3 && (
+                                    <span className="text-slate-500 text-xs">
+                                      +{user.matching_skills.length - 3} more
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => handleInviteUser(user.id)}
+                                  disabled={invitingUser === user.id}
+                                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center"
+                                >
+                                  {invitingUser === user.id ? (
+                                    <span className="flex items-center">
+                                      <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                      Inviting...
+                                    </span>
+                                  ) : (
+                                    <span>Invite</span>
+                                  )}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-400 py-8">
+                          <p>No suggested users found with matching skills.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  
+                  {/* All Users Tab */}
+                  {inviteTab === 'all' && (
+                    <div>
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-lg font-medium text-slate-200">All Available Users</h4>
+                        <span className="text-sm text-slate-400">
+                          {allUsers.length} user{allUsers.length !== 1 ? 's' : ''}
+                        </span>
+                      </div>
+                      
+                      {allUsers.length > 0 ? (
+                        <div className="space-y-3">
+                          {allUsers.map(user => (
+                            <div 
+                              key={user.id} 
+                              className="flex justify-between items-center p-4 border border-slate-700 rounded-lg hover:bg-slate-700/30"
+                            >
+                              <div className="flex items-center">
+                                <div className="w-10 h-10 rounded-full bg-indigo-600/30 flex items-center justify-center text-indigo-400 mr-3">
+                                  {user.profile_picture ? (
+                                    <img 
+                                      src={user.profile_picture} 
+                                      alt={user.username} 
+                                      className="w-10 h-10 rounded-full object-cover"
+                                    />
+                                  ) : (
+                                    user.username.charAt(0).toUpperCase()
+                                  )}
+                                </div>
+                                <div>
+                                  <div className="text-slate-200 font-medium">
+                                    {user.full_name || user.username}
+                                  </div>
+                                  {user.matching_skill_count > 0 ? (
+                                    <div className="text-indigo-400 text-sm">
+                                      {user.matching_skill_count} skill{user.matching_skill_count !== 1 ? 's' : ''} match
+                                    </div>
+                                  ) : (
+                                    <div className="text-slate-500 text-sm">No matching skills</div>
+                                  )}
+                                </div>
+                              </div>
+                              <button
+                                onClick={() => handleInviteUser(user.id)}
+                                disabled={invitingUser === user.id}
+                                className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center"
+                              >
+                                {invitingUser === user.id ? (
+                                  <span className="flex items-center">
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white mr-1"></div>
+                                    Inviting...
+                                  </span>
+                                ) : (
+                                  <span>Invite</span>
+                                )}
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="text-center text-slate-400 py-8">
+                          <p>No users available to invite.</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
