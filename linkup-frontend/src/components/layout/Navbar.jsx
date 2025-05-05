@@ -12,7 +12,7 @@ import {
 import NotificationBell from '../notifications/NotificationBell';
 
 const Navbar = () => {
-    const { user, logout } = useAuth();
+    const { user } = useAuth();
     const location = useLocation();
 
     const isActive = (path) => {
@@ -72,11 +72,19 @@ const Navbar = () => {
                             to={`/profile/${user?.id}`}
                             className="flex items-center space-x-2 p-1.5 text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 rounded-lg transition-colors"
                         >
-                            <img
-                                src={user?.profile_picture || 'https://via.placeholder.com/32'}
-                                alt="Profile"
-                                className="h-8 w-8 rounded-full object-cover"
-                            />
+                            {user.profile_picture ? (
+                                <img
+                                    src={user.profile_picture}
+                                    alt={`${user.first_name} ${user.last_name}`}
+                                    className="w-10 h-10 rounded-full object-cover border-4 border-blue-600"
+                                />
+                                ) : (
+                                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center">
+                                    <span className="text-l text-slate-300">
+                                    {user.full_name.charAt(0).toUpperCase()}
+                                    </span>
+                                </div>
+                                )}
                         </Link>
                     </div>
                 </div>
