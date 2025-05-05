@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { usersAPI } from '../../services/usersApi';
 import { postsAPI } from '../../services/postsApi';
 import { useAuth } from '../../contexts/AuthContext';
@@ -9,7 +9,8 @@ import PostCard from '../posts/PostCard';
 
 const UserProfile = () => {
   const { userId } = useParams();
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, logout } = useAuth();
+  const navigate = useNavigate();
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -61,6 +62,11 @@ const UserProfile = () => {
         post.id === updatedPost.id ? updatedPost : post
       )
     );
+  };
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
   };
 
   if (loading) {
@@ -121,12 +127,20 @@ const UserProfile = () => {
             </div>
           </div>
           {isOwnProfile ? (
-            <Link
-              to="/profile/edit"
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-            >
-              Edit Profile
-            </Link>
+            <div className="flex flex-col space-y-11">
+              <Link
+                to="/profile/edit"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+              >
+                Edit Profile
+              </Link>
+              <button
+                onClick={handleLogout}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+              >
+                Logout
+              </button>
+            </div>
           ) : (
             <FollowButton
               userId={user.id}

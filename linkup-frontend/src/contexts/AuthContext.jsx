@@ -97,16 +97,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = async () => {
-    try {
-      await authAPI.logout();
-      toast.success('Logged out successfully');
-    } catch (error) {
-      console.error('Logout failed:', error);
-    } finally {
       localStorage.removeItem('token');
       localStorage.removeItem('refreshToken');
       setUser(null);
-    }
+      toast.success('Logged out successfully');
   };
 
   const updateProfile = async (userData) => {
