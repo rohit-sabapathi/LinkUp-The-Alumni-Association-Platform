@@ -26,8 +26,10 @@ const DonationHome = () => {
         goal_amount: '',
         start_date: '',
         end_date: '',
+        image: null
     });
     const [selectedCampaign, setSelectedCampaign] = useState(null);
+    const [imagePreview, setImagePreview] = useState(null);
 
     useEffect(() => {
         loadCampaigns();
@@ -152,10 +154,29 @@ const DonationHome = () => {
         }
     };
 
+    const handleImageChange = (e) => {
+        const file = e.target.files[0];
+        if (file) {
+            setNewCampaign({ ...newCampaign, image: file });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setImagePreview(reader.result);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
     const handleCreateCampaign = async (e) => {
         e.preventDefault();
         try {
-            await donationAPI.createCampaign(newCampaign);
+            const formData = new FormData();
+            Object.keys(newCampaign).forEach(key => {
+                if (newCampaign[key] !== null) {
+                    formData.append(key, newCampaign[key]);
+                }
+            });
+
+            await donationAPI.createCampaign(formData);
             toast.success('Campaign created successfully!');
             setShowNewCampaignForm(false);
             setNewCampaign({
@@ -164,7 +185,9 @@ const DonationHome = () => {
                 goal_amount: '',
                 start_date: '',
                 end_date: '',
+                image: null
             });
+            setImagePreview(null);
             loadCampaigns();
         } catch (error) {
             console.error('Failed to create campaign:', error);
@@ -233,100 +256,177 @@ const DonationHome = () => {
     return (
         <div className="max-w-7xl mx-auto px-4 py-8">
             <div className="mb-8">
-                <h1 className="text-3xl font-bold text-slate-100 mb-2">Support Your Alumni Association</h1>
-                <p className="text-slate-400">Your contribution helps us organize better events and support our community.</p>
+                <div className="flex justify-between items-center">
+                    <div>
+                        <h1 className="text-3xl font-bold text-slate-100 mb-2">Support Your Alumni Association</h1>
+                        <p className="text-slate-400">Your contribution helps us organize better events and support our community.</p>
+                    </div>
+                    {user && (
+                        <button
+                            onClick={() => setShowNewCampaignForm(true)}
+                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                        >
+                            <PlusIcon className="h-5 w-5 mr-2" />
+                            Create Campaign
+                        </button>
+                    )}
+                </div>
             </div>
+
+            {/* New Campaign Modal */}
+            {showNewCampaignForm && (
+                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+                    <div className="bg-slate-800 rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                        <div className="p-6">
+                            <div className="flex justify-between items-start mb-4">
+                                <h2 className="text-2xl font-bold text-slate-100">Create New Campaign</h2>
+                                <button
+                                    onClick={() => {
+                                        setShowNewCampaignForm(false);
+                                        setNewCampaign({
+                                            title: '',
+                                            description: '',
+                                            goal_amount: '',
+                                            start_date: '',
+                                            end_date: '',
+                                            image: null
+                                        });
+                                        setImagePreview(null);
+                                    }}
+                                    className="text-slate-400 hover:text-slate-200"
+                                >
+                                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <form onSubmit={handleCreateCampaign} className="space-y-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                                        Campaign Title
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={newCampaign.title}
+                                        onChange={(e) => setNewCampaign({ ...newCampaign, title: e.target.value })}
+                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                                        Description
+                                    </label>
+                                    <textarea
+                                        value={newCampaign.description}
+                                        onChange={(e) => setNewCampaign({ ...newCampaign, description: e.target.value })}
+                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                        rows="4"
+                                        required
+                                    />
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                                        Goal Amount
+                                    </label>
+                                    <input
+                                        type="number"
+                                        value={newCampaign.goal_amount}
+                                        onChange={(e) => setNewCampaign({ ...newCampaign, goal_amount: e.target.value })}
+                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                        min="1"
+                                        required
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">
+                                            Start Date
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={newCampaign.start_date}
+                                            onChange={(e) => setNewCampaign({ ...newCampaign, start_date: e.target.value })}
+                                            className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                            required
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">
+                                            End Date
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            value={newCampaign.end_date}
+                                            onChange={(e) => setNewCampaign({ ...newCampaign, end_date: e.target.value })}
+                                            className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                            required
+                                        />
+                                    </div>
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">
+                                        Campaign Image
+                                    </label>
+                                    <input
+                                        type="file"
+                                        accept="image/*"
+                                        onChange={handleImageChange}
+                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                                    />
+                                    {imagePreview && (
+                                        <div className="mt-2">
+                                            <img
+                                                src={imagePreview}
+                                                alt="Preview"
+                                                className="w-32 h-32 object-cover rounded-lg"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="flex justify-end space-x-4">
+                                    <button
+                                        type="button"
+                                        onClick={() => {
+                                            setShowNewCampaignForm(false);
+                                            setNewCampaign({
+                                                title: '',
+                                                description: '',
+                                                goal_amount: '',
+                                                start_date: '',
+                                                end_date: '',
+                                                image: null
+                                            });
+                                            setImagePreview(null);
+                                        }}
+                                        className="px-4 py-2 text-slate-300 hover:text-slate-100"
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        type="submit"
+                                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                                    >
+                                        Create Campaign
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Active Campaigns */}
             <div className="mb-12">
                 <div className="flex justify-between items-center mb-6">
                     <h2 className="text-2xl font-semibold text-slate-100">Active Campaigns</h2>
-                    {(user?.is_superuser || user?.is_staff) && (
-                        <button
-                            onClick={() => setShowNewCampaignForm(!showNewCampaignForm)}
-                            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                        >
-                            <PlusIcon className="h-5 w-5 mr-2" />
-                            New Campaign
-                        </button>
-                    )}
                 </div>
-
-                {showNewCampaignForm && (
-                    <div className="bg-slate-800/50 p-6 rounded-lg border border-slate-700 mb-6">
-                        <h3 className="text-xl font-semibold text-slate-100 mb-4">Create New Campaign</h3>
-                        <form onSubmit={handleCreateCampaign} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Title</label>
-                                <input
-                                    type="text"
-                                    value={newCampaign.title}
-                                    onChange={(e) => setNewCampaign({...newCampaign, title: e.target.value})}
-                                    className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                                <textarea
-                                    value={newCampaign.description}
-                                    onChange={(e) => setNewCampaign({...newCampaign, description: e.target.value})}
-                                    className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                    rows="3"
-                                    required
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Goal Amount (₹)</label>
-                                <input
-                                    type="number"
-                                    value={newCampaign.goal_amount}
-                                    onChange={(e) => setNewCampaign({...newCampaign, goal_amount: e.target.value})}
-                                    className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                    min="1"
-                                    required
-                                />
-                            </div>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Start Date</label>
-                                    <input
-                                        type="datetime-local"
-                                        value={newCampaign.start_date}
-                                        onChange={(e) => setNewCampaign({...newCampaign, start_date: e.target.value})}
-                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                        required
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">End Date</label>
-                                    <input
-                                        type="datetime-local"
-                                        value={newCampaign.end_date}
-                                        onChange={(e) => setNewCampaign({...newCampaign, end_date: e.target.value})}
-                                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                        required
-                                    />
-                                </div>
-                            </div>
-                            <div className="flex justify-end gap-3">
-                                <button
-                                    type="button"
-                                    onClick={() => setShowNewCampaignForm(false)}
-                                    className="px-4 py-2 text-slate-300 hover:text-slate-100"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                                >
-                                    Create Campaign
-                                </button>
-                            </div>
-                        </form>
-                    </div>
-                )}
 
                 {loadingCampaigns ? (
                     <div className="text-center text-slate-400 py-8">Loading campaigns...</div>

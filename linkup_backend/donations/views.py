@@ -195,11 +195,6 @@ class DonationCampaignListCreateView(generics.ListCreateAPIView):
     serializer_class = DonationCampaignSerializer
     permission_classes = [permissions.IsAuthenticated]
 
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            return [permissions.IsAuthenticated(), IsAdminUser()]
-        return [permissions.IsAuthenticated()]
-
 class DonationCampaignDetailView(generics.RetrieveUpdateDestroyAPIView):
     queryset = DonationCampaign.objects.all()
     serializer_class = DonationCampaignSerializer
