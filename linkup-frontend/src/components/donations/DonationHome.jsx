@@ -11,9 +11,12 @@ const RAZORPAY_DESCRIPTION = 'Alumni Association Donation';
 
 const DonationHome = () => {
     const { user } = useAuth();
-    const [amount, setAmount] = useState('');
+    const [generalAmount, setGeneralAmount] = useState('');
+    const [campaignAmounts, setCampaignAmounts] = useState({});
     const [message, setMessage] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [loadingItems, setLoadingItems] = useState({
+        general: false
+    });
     const [campaigns, setCampaigns] = useState([]);
     const [loadingCampaigns, setLoadingCampaigns] = useState(false);
     const [showNewCampaignForm, setShowNewCampaignForm] = useState(false);
@@ -52,6 +55,18 @@ const DonationHome = () => {
             setLoadingCampaigns(true);
             const response = await donationAPI.getCampaigns();
             setCampaigns(response?.data || []);
+            
+            // Initialize amounts for each campaign
+            const initialAmounts = {};
+            const initialLoadingState = { general: false };
+            
+            response?.data?.forEach(campaign => {
+                initialAmounts[campaign.id] = '';
+                initialLoadingState[campaign.id] = false;
+            });
+            
+            setCampaignAmounts(initialAmounts);
+            setLoadingItems(initialLoadingState);
         } catch (error) {
             console.error('Failed to load campaigns:', error);
             toast.error('Failed to load donation campaigns');
@@ -63,13 +78,22 @@ const DonationHome = () => {
 
     const handleDonation = async (e, campaignId = null) => {
         e.preventDefault();
-        if (!amount || isNaN(amount) || parseFloat(amount) <= 0) {
+        
+        // Get the appropriate amount based on whether it's a campaign or general donation
+        const donationAmount = campaignId ? campaignAmounts[campaignId] : generalAmount;
+        const loadingKey = campaignId || 'general';
+        
+        if (!donationAmount || isNaN(donationAmount) || parseFloat(donationAmount) <= 0) {
             toast.error('Please enter a valid amount');
             return;
         }
 
         try {
-            setLoading(true);
+            // Set loading state for only this specific form
+            setLoadingItems(prev => ({
+                ...prev,
+                [loadingKey]: true
+            }));
             
             if (!razorpayKey) {
                 throw new Error('Payment configuration not loaded');
@@ -84,7 +108,7 @@ const DonationHome = () => {
 
             // Create donation record
             const donationResponse = await donationAPI.createDonation({
-                amount: parseFloat(amount),
+                amount: parseFloat(donationAmount),
                 currency: selectedCurrency,
                 message,
                 campaignId
@@ -112,19 +136,37 @@ const DonationHome = () => {
                         });
                         
                         toast.success('Thank you for your donation!');
-                        setAmount('');
+                        
+                        // Reset the specific amount field that was used
+                        if (campaignId) {
+                            setCampaignAmounts(prev => ({
+                                ...prev,
+                                [campaignId]: ''
+                            }));
+                        } else {
+                            setGeneralAmount('');
+                        }
+                        
                         setMessage('');
                         loadCampaigns();
                     } catch (error) {
                         console.error('Payment verification failed:', error);
                         toast.error(error.message || 'Payment verification failed');
                     } finally {
-                        setLoading(false);
+                        // Clear loading state for this specific form
+                        setLoadingItems(prev => ({
+                            ...prev,
+                            [loadingKey]: false
+                        }));
                     }
                 },
                 modal: {
                     ondismiss: function() {
-                        setLoading(false);
+                        // Clear loading state for this specific form
+                        setLoadingItems(prev => ({
+                            ...prev,
+                            [loadingKey]: false
+                        }));
                         toast.error('Payment cancelled');
                     },
                     escape: true,
@@ -137,7 +179,11 @@ const DonationHome = () => {
 
             const razorpay = new window.Razorpay(options);
             razorpay.on('payment.failed', function (response) {
-                setLoading(false);
+                // Clear loading state for this specific form
+                setLoadingItems(prev => ({
+                    ...prev,
+                    [loadingKey]: false
+                }));
                 toast.error(response.error.description || 'Payment failed');
             });
             razorpay.open();
@@ -150,7 +196,11 @@ const DonationHome = () => {
             }
             
             toast.error(errorMessage);
-            setLoading(false);
+            // Clear loading state for this specific form
+            setLoadingItems(prev => ({
+                ...prev,
+                [loadingKey]: false
+            }));
         }
     };
 
@@ -195,8 +245,8 @@ const DonationHome = () => {
         }
     };
 
-    const renderDonationForm = (campaignId = null) => (
-        <form onSubmit={(e) => handleDonation(e, campaignId)} className="space-y-4">
+    const renderDonationForm = () => (
+        <form onSubmit={(e) => handleDonation(e)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-sm font-medium text-slate-300 mb-1">
@@ -204,8 +254,8 @@ const DonationHome = () => {
                     </label>
                     <input
                         type="number"
-                        value={amount}
-                        onChange={(e) => setAmount(e.target.value)}
+                        value={generalAmount}
+                        onChange={(e) => setGeneralAmount(e.target.value)}
                         placeholder="Enter amount"
                         className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
                         min="1"
@@ -229,26 +279,24 @@ const DonationHome = () => {
                     </select>
                 </div>
             </div>
-            {!campaignId && (
-                <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-1">
-                        Message (Optional)
-                    </label>
-                    <textarea
-                        value={message}
-                        onChange={(e) => setMessage(e.target.value)}
-                        placeholder="Add a message with your donation"
-                        className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                        rows="3"
-                    />
-                </div>
-            )}
+            <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">
+                    Message (Optional)
+                </label>
+                <textarea
+                    value={message}
+                    onChange={(e) => setMessage(e.target.value)}
+                    placeholder="Add a message with your donation"
+                    className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
+                    rows="3"
+                />
+            </div>
             <button
                 type="submit"
-                disabled={loading}
+                disabled={loadingItems.general}
                 className="w-full bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 disabled:opacity-50"
             >
-                {loading ? 'Processing...' : 'Donate Now'}
+                {loadingItems.general ? 'Processing...' : 'Donate Now'}
             </button>
         </form>
     );
@@ -473,18 +521,21 @@ const DonationHome = () => {
                                                 type="number"
                                                 placeholder="Enter amount"
                                                 className="w-full bg-slate-900/50 text-slate-200 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-700"
-                                                value={amount}
-                                                onChange={(e) => setAmount(e.target.value)}
+                                                value={campaignAmounts[campaign.id] || ''}
+                                                onChange={(e) => setCampaignAmounts({
+                                                    ...campaignAmounts,
+                                                    [campaign.id]: e.target.value
+                                                })}
                                                 min="1"
                                                 required
                                             />
                                         </div>
                                         <button
                                             type="submit"
-                                            disabled={loading}
+                                            disabled={loadingItems[campaign.id]}
                                             className="w-full bg-blue-600 text-white rounded-lg py-2 hover:bg-blue-700 disabled:opacity-50"
                                         >
-                                            {loading ? 'Processing...' : 'Donate Now'}
+                                            {loadingItems[campaign.id] ? 'Processing...' : 'Donate Now'}
                                         </button>
                                     </form>
                                 </div>
