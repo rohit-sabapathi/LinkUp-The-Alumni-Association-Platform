@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { PhotoIcon, ChartBarSquareIcon } from '@heroicons/react/24/solid';
+import { useState, useRef, useEffect } from 'react';
+import { ChartBarSquareIcon, PaperClipIcon, PhotoIcon, VideoCameraIcon } from '@heroicons/react/24/solid';
 import { postsAPI } from '../../services/postsApi';
 import { useAuth } from '../../contexts/AuthContext';
 import CreatePoll from './CreatePoll';
@@ -8,21 +8,75 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
   const { user } = useAuth();
   const [content, setContent] = useState('');
   const [media, setMedia] = useState(null);
+  const [mediaType, setMediaType] = useState('none');
   const [mediaPreview, setMediaPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPollCreator, setShowPollCreator] = useState(false);
+  const [showAttachMenu, setShowAttachMenu] = useState(false);
+  const attachMenuRef = useRef(null);
+  const attachButtonRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Close attachment menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (
+        showAttachMenu &&
+        attachMenuRef.current && 
+        !attachMenuRef.current.contains(event.target) &&
+        attachButtonRef.current &&
+        !attachButtonRef.current.contains(event.target)
+      ) {
+        setShowAttachMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showAttachMenu]);
 
   const handleMediaChange = (e) => {
     const file = e.target.files[0];
-    if (file) {
-      setMedia(file);
+    if (!file) return;
+    
+    setMedia(file);
+    const fileType = file.type.split('/')[0];
+    setMediaType(fileType === 'video' ? 'video' : 'image');
+
+    if (fileType === 'video') {
+      const videoURL = URL.createObjectURL(file);
+      setMediaPreview(videoURL);
+    } else {
       const reader = new FileReader();
       reader.onloadend = () => {
         setMediaPreview(reader.result);
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleAttachmentClick = () => {
+    setShowAttachMenu(!showAttachMenu);
+  };
+
+  const handleImageClick = () => {
+    fileInputRef.current.accept = "image/*";
+    fileInputRef.current.click();
+    setShowAttachMenu(false);
+  };
+
+  const handleVideoClick = () => {
+    fileInputRef.current.accept = "video/*";
+    fileInputRef.current.click();
+    setShowAttachMenu(false);
+  };
+
+  const handlePollClick = () => {
+    setShowPollCreator(true);
+    setShowAttachMenu(false);
   };
 
   const handleSubmit = async (e) => {
@@ -35,14 +89,17 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
     try {
       const formData = new FormData();
       formData.append('content', content);
+      
       if (media) {
         formData.append('media', media);
+        formData.append('media_type', mediaType);
       }
 
       const response = await postsAPI.createPost(formData);
       setContent('');
       setMedia(null);
       setMediaPreview('');
+      setMediaType('none');
       onPostCreated(response.data);
     } catch (err) {
       console.error('Failed to create post:', err);
@@ -95,16 +152,27 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
 
         {mediaPreview && (
           <div className="mt-3 relative">
-            <img
-              src={mediaPreview}
-              alt="Preview"
-              className="rounded-lg max-h-60 w-full object-cover"
-            />
+            {mediaType === 'video' ? (
+              <video
+                src={mediaPreview}
+                controls
+                className="rounded-lg max-h-60 w-full"
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <img
+                src={mediaPreview}
+                alt="Preview"
+                className="rounded-lg max-h-60 w-full object-cover"
+              />
+            )}
             <button
               type="button"
               onClick={() => {
                 setMedia(null);
                 setMediaPreview('');
+                setMediaType('none');
               }}
               className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
             >
@@ -129,24 +197,54 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
         )}
 
         <div className="mt-4 flex items-center justify-between">
-          <div className="flex space-x-4">
-            <label className="cursor-pointer text-slate-300 hover:text-blue-500 transition-colors">
-              <PhotoIcon className="h-6 w-6" />
-              <input
-                type="file"
-                accept="image/*"
-                onChange={handleMediaChange}
-                className="hidden"
-              />
-            </label>
-            
+          <div className="relative">
             <button
               type="button"
-              onClick={() => setShowPollCreator(true)}
+              ref={attachButtonRef}
+              onClick={handleAttachmentClick}
               className="text-slate-300 hover:text-blue-500 transition-colors"
             >
-              <ChartBarSquareIcon className="h-6 w-6" />
+              <PaperClipIcon className="h-6 w-6" />
             </button>
+            
+            {showAttachMenu && (
+              <div 
+                ref={attachMenuRef}
+                className="absolute left-0 bottom-10 bg-slate-700 rounded-md shadow-lg p-2 z-10"
+              >
+                <button
+                  type="button"
+                  onClick={handleImageClick}
+                  className="flex items-center space-x-2 text-slate-300 hover:text-blue-500 p-2 transition-colors w-full text-left"
+                >
+                  <PhotoIcon className="h-5 w-5" />
+                  <span>Image</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVideoClick}
+                  className="flex items-center space-x-2 text-slate-300 hover:text-blue-500 p-2 transition-colors w-full text-left"
+                >
+                  <VideoCameraIcon className="h-5 w-5" />
+                  <span>Video</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePollClick}
+                  className="flex items-center space-x-2 text-slate-300 hover:text-blue-500 p-2 transition-colors w-full text-left"
+                >
+                  <ChartBarSquareIcon className="h-5 w-5" />
+                  <span>Poll</span>
+                </button>
+              </div>
+            )}
+            
+            <input
+              ref={fileInputRef}
+              type="file"
+              onChange={handleMediaChange}
+              className="hidden"
+            />
           </div>
 
           <button

@@ -129,11 +129,23 @@ const PostCard = ({ post, onPostUpdate }) => {
         
         {/* Media Display (only if not a poll) */}
         {!post.is_poll && post.media && (
-          <img 
-            src={post.media} 
-            alt="Post content" 
-            className="mt-3 rounded-lg max-h-96 w-full object-cover"
-          />
+          <>
+            {post.media_type === 'video' ? (
+              <video 
+                src={post.media} 
+                controls
+                className="mt-3 rounded-lg max-h-96 w-full"
+              >
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              <img 
+                src={post.media} 
+                alt="Post content" 
+                className="mt-3 rounded-lg max-h-96 w-full object-cover"
+              />
+            )}
+          </>
         )}
       </div>
 

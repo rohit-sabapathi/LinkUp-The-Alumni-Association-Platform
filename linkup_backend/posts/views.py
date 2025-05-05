@@ -30,7 +30,9 @@ class PostViewSet(viewsets.ModelViewSet):
         ).order_by('-created_at')
 
     def perform_create(self, serializer):
-        serializer.save(author=self.request.user)
+        # Determine media type if media is present
+        media_type = self.request.data.get('media_type', 'none')
+        serializer.save(author=self.request.user, media_type=media_type)
 
     @transaction.atomic
     @action(detail=False, methods=['post'], url_path='create-poll')
