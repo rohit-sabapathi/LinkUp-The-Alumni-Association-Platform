@@ -68,24 +68,34 @@ const Navbar = () => {
                             <ChatBubbleLeftRightIcon className="h-6 w-6" />
                         </Link>
                         <NotificationBell />
-                        <Link
-                            to={`/profile/${user?.id}`}
-                            className="flex items-center space-x-2 p-1.5 text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 rounded-lg transition-colors"
-                        >
-                            {user.profile_picture ? (
-                                <img
-                                    src={user.profile_picture}
-                                    alt={`${user.first_name} ${user.last_name}`}
-                                    className="w-10 h-10 rounded-full object-cover border-4 border-blue-600"
-                                />
+                        {user && (
+                            <Link
+                                to={`/profile/${user?.id}`}
+                                className="flex items-center space-x-2 p-1.5 text-slate-300 hover:bg-slate-700/50 hover:text-slate-100 rounded-lg transition-colors"
+                            >
+                                {user.profile_picture ? (
+                                    <img
+                                        src={user.profile_picture}
+                                        alt={user.full_name || "User"}
+                                        className="w-10 h-10 rounded-full object-cover border-4 border-blue-600"
+                                    />
                                 ) : (
-                                <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center">
-                                    <span className="text-l text-slate-300">
-                                    {user.full_name.charAt(0).toUpperCase()}
-                                    </span>
-                                </div>
+                                    <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center">
+                                        <span className="text-l text-slate-300">
+                                        {user.full_name ? user.full_name.charAt(0).toUpperCase() : "U"}
+                                        </span>
+                                    </div>
                                 )}
-                        </Link>
+                            </Link>
+                        )}
+                        {!user && (
+                            <Link
+                                to="/login"
+                                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                            >
+                                Login
+                            </Link>
+                        )}
                     </div>
                 </div>
             </div>

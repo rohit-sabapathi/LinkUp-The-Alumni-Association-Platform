@@ -11,6 +11,7 @@ class Post(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     likes = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='liked_posts', blank=True)
     saved_by = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='saved_posts', blank=True)
+    is_poll = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['-created_at']
@@ -25,6 +26,47 @@ class Post(models.Model):
     @property
     def comment_count(self):
         return self.comments.count()
+
+
+class Poll(models.Model):
+    post = models.OneToOneField(Post, on_delete=models.CASCADE, related_name='poll')
+    question = models.CharField(max_length=255)
+    end_date = models.DateTimeField(null=True, blank=True)
+    
+    def __str__(self):
+        return self.question
+    
+    @property
+    def total_votes(self):
+        return sum(option.votes.count() for option in self.options.all())
+    
+    @property
+    def is_ended(self):
+        from django.utils import timezone
+        if self.end_date:
+            return timezone.now() > self.end_date
+        return False
+
+
+class PollOption(models.Model):
+    poll = models.ForeignKey(Poll, on_delete=models.CASCADE, related_name='options')
+    text = models.CharField(max_length=255)
+    votes = models.ManyToManyField(settings.AUTH_USER_MODEL, related_name='poll_votes', blank=True)
+    
+    def __str__(self):
+        return self.text
+    
+    @property
+    def vote_count(self):
+        return self.votes.count()
+    
+    @property
+    def percentage(self):
+        total = self.poll.total_votes
+        if total > 0:
+            return round((self.vote_count / total) * 100)
+        return 0
+
 
 class Comment(models.Model):
     post = models.ForeignKey(Post, on_delete=models.CASCADE, related_name='comments')

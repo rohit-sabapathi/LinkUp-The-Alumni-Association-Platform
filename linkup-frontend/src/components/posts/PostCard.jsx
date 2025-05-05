@@ -5,6 +5,7 @@ import { HeartIcon, ChatBubbleLeftIcon, PaperAirplaneIcon } from '@heroicons/rea
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { useAuth } from '../../contexts/AuthContext';
 import { postsAPI } from '../../services/postsApi';
+import PollDisplay from './PollDisplay';
 
 const PostCard = ({ post, onPostUpdate }) => {
   const { user } = useAuth();
@@ -42,6 +43,10 @@ const PostCard = ({ post, onPostUpdate }) => {
     } finally {
       setIsLiking(false);
     }
+  };
+
+  const handlePollVote = (updatedPost) => {
+    onPostUpdate(updatedPost);
   };
 
   const handleCommentClick = async () => {
@@ -112,7 +117,18 @@ const PostCard = ({ post, onPostUpdate }) => {
       {/* Post Content */}
       <div className="mb-4">
         <p className="text-slate-200 whitespace-pre-wrap">{post.content}</p>
-        {post.media && (
+        
+        {/* Poll Display */}
+        {post.is_poll && post.poll && (
+          <PollDisplay 
+            poll={post.poll} 
+            postId={post.id}
+            onPollVote={handlePollVote}
+          />
+        )}
+        
+        {/* Media Display (only if not a poll) */}
+        {!post.is_poll && post.media && (
           <img 
             src={post.media} 
             alt="Post content" 

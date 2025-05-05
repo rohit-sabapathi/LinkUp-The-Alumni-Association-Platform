@@ -17,6 +17,14 @@ export const postsAPI = {
       },
     }),
   
+  // Create a new poll
+  createPoll: (pollData) =>
+    api.post('/posts/create-poll/', pollData),
+    
+  // Vote on a poll
+  votePoll: (postId, optionId) =>
+    api.post(`/posts/${postId}/vote/`, { option_id: optionId }),
+  
   // Like/unlike a post
   likePost: (postId) => 
     api.post(`/posts/${postId}/like/`),

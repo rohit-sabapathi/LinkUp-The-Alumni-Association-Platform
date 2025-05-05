@@ -3,8 +3,9 @@ from rest_framework.decorators import action
 from rest_framework.response import Response
 from django.shortcuts import get_object_or_404
 from django.contrib.auth import get_user_model
-from .models import Post, Comment
-from .serializers import PostSerializer, CommentSerializer
+from django.db import transaction
+from .models import Post, Comment, Poll, PollOption
+from .serializers import PostSerializer, CommentSerializer, CreatePollSerializer
 
 User = get_user_model()
 
@@ -30,6 +31,63 @@ class PostViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(author=self.request.user)
+
+    @transaction.atomic
+    @action(detail=False, methods=['post'], url_path='create-poll')
+    def create_poll(self, request):
+        poll_serializer = CreatePollSerializer(data=request.data)
+        
+        if not poll_serializer.is_valid():
+            return Response(poll_serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Create post first
+        post = Post.objects.create(
+            author=request.user,
+            content=request.data.get('content', ''),
+            is_poll=True
+        )
+        
+        # Create poll
+        poll = Poll.objects.create(
+            post=post,
+            question=poll_serializer.validated_data['question'],
+            end_date=poll_serializer.validated_data.get('end_date')
+        )
+        
+        # Create poll options
+        for option_text in poll_serializer.validated_data['options']:
+            PollOption.objects.create(poll=poll, text=option_text)
+            
+        # Return the created post with poll data
+        return Response(PostSerializer(post, context={'request': request}).data, status=status.HTTP_201_CREATED)
+    
+    @action(detail=True, methods=['post'], url_path='vote')
+    def vote(self, request, pk=None):
+        post = self.get_object()
+        if not post.is_poll:
+            return Response({"detail": "This is not a poll post."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        option_id = request.data.get('option_id')
+        if not option_id:
+            return Response({"detail": "No option selected."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        try:
+            option = post.poll.options.get(id=option_id)
+        except PollOption.DoesNotExist:
+            return Response({"detail": "Invalid option."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Check if poll has ended
+        if post.poll.is_ended:
+            return Response({"detail": "This poll has ended."}, status=status.HTTP_400_BAD_REQUEST)
+            
+        # Remove any previous votes by this user on this poll
+        for poll_option in post.poll.options.all():
+            poll_option.votes.remove(request.user)
+            
+        # Add vote to selected option
+        option.votes.add(request.user)
+        
+        return Response(PostSerializer(post, context={'request': request}).data)
 
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):

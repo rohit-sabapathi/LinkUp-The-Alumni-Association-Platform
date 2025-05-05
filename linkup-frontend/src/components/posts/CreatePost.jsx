@@ -1,7 +1,8 @@
 import { useState } from 'react';
-import { PhotoIcon } from '@heroicons/react/24/solid';
+import { PhotoIcon, ChartBarSquareIcon } from '@heroicons/react/24/solid';
 import { postsAPI } from '../../services/postsApi';
 import { useAuth } from '../../contexts/AuthContext';
+import CreatePoll from './CreatePoll';
 
 const CreatePost = ({ onPostCreated = () => {} }) => {
   const { user } = useAuth();
@@ -10,6 +11,7 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
   const [mediaPreview, setMediaPreview] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [showPollCreator, setShowPollCreator] = useState(false);
 
   const handleMediaChange = (e) => {
     const file = e.target.files[0];
@@ -50,6 +52,20 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
     }
   };
 
+  const handlePollCreated = (pollPost) => {
+    onPostCreated(pollPost);
+    setShowPollCreator(false);
+  };
+
+  if (showPollCreator) {
+    return (
+      <CreatePoll 
+        onPollCreated={handlePollCreated}
+        onCancel={() => setShowPollCreator(false)}
+      />
+    );
+  }
+
   return (
     <div className="bg-slate-800 rounded-lg shadow-lg p-4">
       <div className="flex items-center space-x-3 mb-4">
@@ -62,7 +78,7 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
             ) : (
               <div className="w-10 h-10 rounded-full bg-slate-600 flex items-center justify-center">
                 <span className="text-l text-slate-300">
-                  {user.full_name.charAt(0).toUpperCase()}
+                  {user.full_name?.charAt(0).toUpperCase() || 'U'}
                 </span>
               </div>
             )}
@@ -113,15 +129,25 @@ const CreatePost = ({ onPostCreated = () => {} }) => {
         )}
 
         <div className="mt-4 flex items-center justify-between">
-          <label className="cursor-pointer text-slate-300 hover:text-blue-500 transition-colors">
-            <PhotoIcon className="h-6 w-6" />
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleMediaChange}
-              className="hidden"
-            />
-          </label>
+          <div className="flex space-x-4">
+            <label className="cursor-pointer text-slate-300 hover:text-blue-500 transition-colors">
+              <PhotoIcon className="h-6 w-6" />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={handleMediaChange}
+                className="hidden"
+              />
+            </label>
+            
+            <button
+              type="button"
+              onClick={() => setShowPollCreator(true)}
+              className="text-slate-300 hover:text-blue-500 transition-colors"
+            >
+              <ChartBarSquareIcon className="h-6 w-6" />
+            </button>
+          </div>
 
           <button
             type="submit"
