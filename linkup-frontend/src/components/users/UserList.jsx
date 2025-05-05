@@ -9,7 +9,7 @@ const UserList = ({ type = 'followers', userId }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [nextPage, setNextPage] = useState(null);
-  const { currentUser } = useAuth();
+  const { user } = useAuth();
   const { ref, inView } = useInView();
 
   const fetchUsers = useCallback(async (page = 1) => {

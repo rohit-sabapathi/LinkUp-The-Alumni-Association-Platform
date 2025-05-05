@@ -29,6 +29,7 @@ urlpatterns = [
     path('api/preferences/', include('preferences.urls')),
     path('api/donations/', include('donations.urls')),
     path('api/projects/', include('projects.urls')),
+    path('api/mentorship/', include('mentorship.urls')),
     
     # Django allauth URLs
     path('accounts/', include('allauth.urls')),

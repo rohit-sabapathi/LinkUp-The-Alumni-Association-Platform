@@ -20,6 +20,13 @@ import SmartNest from './components/smartnest/SmartNest';
 import ProjectCollaboration from './components/smartnest/ProjectCollaboration';
 import ProjectWorkspace from './components/smartnest/ProjectWorkspace';
 import Mentorship from './components/smartnest/Mentorship';
+import FindMentor from './components/mentorship/FindMentor';
+import MentorDetail from './components/mentorship/MentorDetail';
+import BecomeMentor from './components/mentorship/BecomeMentor';
+import MentorProfile from './components/mentorship/MentorProfile';
+import MeetingDetail from './components/mentorship/MeetingDetail';
+import MeetingsList from './components/mentorship/MeetingsList';
+import MeetingRequests from './components/mentorship/MeetingRequests';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationHome from './components/donations/DonationHome';
@@ -173,6 +180,69 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <ProjectWorkspace />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/find"
+            element={
+              <ProtectedRoute>
+                <FindMentor />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/mentors/:mentorId"
+            element={
+              <ProtectedRoute>
+                <MentorDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/become-mentor"
+            element={
+              <ProtectedRoute>
+                <BecomeMentor />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/my-profile"
+            element={
+              <ProtectedRoute>
+                <MentorProfile />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/meetings/:meetingId"
+            element={
+              <ProtectedRoute>
+                <MeetingDetail />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/mentorship/meetings"
+            element={
+              <ProtectedRoute>
+                <MeetingsList />
+              </ProtectedRoute>
+            }
+          />
+          
+          <Route
+            path="/mentorship/requests"
+            element={
+              <ProtectedRoute>
+                <MeetingRequests />
               </ProtectedRoute>
             }
           />
