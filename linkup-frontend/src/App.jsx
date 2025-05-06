@@ -20,6 +20,9 @@ import SmartNest from './components/smartnest/SmartNest';
 import ProjectCollaboration from './components/smartnest/ProjectCollaboration';
 import ProjectWorkspace from './components/smartnest/ProjectWorkspace';
 import Mentorship from './components/smartnest/Mentorship';
+import GameCorner from './components/smartnest/games/GameCorner';
+import WordleGame from './components/smartnest/games/WordleGame';
+import PuzzleGame from './components/smartnest/games/PuzzleGame';
 import FindMentor from './components/mentorship/FindMentor';
 import MentorDetail from './components/mentorship/MentorDetail';
 import BecomeMentor from './components/mentorship/BecomeMentor';
@@ -161,6 +164,33 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <Mentorship />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/games"
+            element={
+              <ProtectedRoute>
+                <GameCorner />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/games/wordle"
+            element={
+              <ProtectedRoute>
+                <WordleGame />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/games/puzzle"
+            element={
+              <ProtectedRoute>
+                <PuzzleGame />
               </ProtectedRoute>
             }
           />

@@ -47,6 +47,7 @@ INSTALLED_APPS = [
     'projects',
     'mentorship',
     'channels',
+    'games',
     # Google Authentication
     'django.contrib.sites',
     'allauth',
