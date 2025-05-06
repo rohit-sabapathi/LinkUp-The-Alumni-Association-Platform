@@ -424,16 +424,20 @@ export const respondToInvitation = async (invitationId, status) => {
 // Funding related API calls
 export const createFundingRequest = async (formData) => {
   try {
-    const response = await axios.post(`${API_URL}/funding/`, formData, {
-      headers: {
-        ...getAuthHeader(),
-        'Content-Type': 'multipart/form-data',
-      },
-    });
+    const response = await axios.post(
+      `${API_URL}/funding/`,
+      formData,
+      {
+        headers: {
+          ...getAuthHeader(),
+          'Content-Type': 'multipart/form-data',
+        },
+      }
+    );
     return response.data;
   } catch (error) {
     console.error('Error creating funding request:', error);
-    throw error.response?.data || { detail: 'Failed to create funding request' };
+    throw error.response?.data || error;
   }
 };
 
@@ -468,5 +472,41 @@ export const contributeToFunding = async (fundingId, contributionData) => {
   } catch (error) {
     console.error('Error contributing to funding:', error);
     throw error.response?.data || { detail: 'Failed to contribute to funding' };
+  }
+};
+
+export const closeFundingRequest = async (fundingId) => {
+  const response = await axios.post(
+    `${API_URL}/funding/${fundingId}/close/`,
+    {},  // Empty body
+    {
+      headers: getAuthHeader()
+    }
+  );
+  return response.data;
+};
+
+export const deleteFundingRequest = async (fundingId) => {
+  const response = await axios.delete(
+    `${API_URL}/funding/${fundingId}/delete/`,
+    {
+      headers: getAuthHeader()
+    }
+  );
+  return response.data;
+};
+
+export const fetchCompletedFundingRequests = async () => {
+  try {
+    const response = await axios.get(
+      `${API_URL}/funding/completed/`,
+      {
+        headers: getAuthHeader(),
+      }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching completed funding requests:', error);
+    throw error.response?.data || error;
   }
 }; 

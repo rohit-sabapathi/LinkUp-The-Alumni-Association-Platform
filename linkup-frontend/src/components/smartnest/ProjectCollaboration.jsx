@@ -32,7 +32,10 @@ import {
   fetchFundingRequests,
   fetchMyFundingRequests,
   updateFundingStatus,
-  contributeToFunding
+  contributeToFunding,
+  closeFundingRequest,
+  deleteFundingRequest,
+  fetchCompletedFundingRequests
 } from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -102,6 +105,7 @@ const ProjectCollaboration = () => {
     amount: '',
     note: ''
   });
+  const [completedFundingRequests, setCompletedFundingRequests] = useState([]);
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -338,11 +342,13 @@ const ProjectCollaboration = () => {
       const loadFundingData = async () => {
         setLoading(true);
         try {
-          const [allFunding, myFunding] = await Promise.all([
+          const [allFunding, myFunding, completedFunding] = await Promise.all([
             fetchFundingRequests(),
-            fetchMyFundingRequests()
+            fetchMyFundingRequests(),
+            fetchCompletedFundingRequests()
           ]);
           setFundingRequests(allFunding);
+          setCompletedFundingRequests(completedFunding);
         } catch (error) {
           console.error('Error fetching funding requests:', error);
           toast.error('Failed to load funding requests');
@@ -696,7 +702,7 @@ const ProjectCollaboration = () => {
       formData.append('project', fundingForm.projectId);
       formData.append('title', fundingForm.title);
       formData.append('description', fundingForm.description);
-      formData.append('amount', fundingForm.amount);
+      formData.append('amount', fundingForm.amount.toString());
       if (fundingForm.qrCode) {
         formData.append('qr_code', fundingForm.qrCode);
       }
@@ -714,7 +720,7 @@ const ProjectCollaboration = () => {
       toast.success('Funding request created successfully!');
     } catch (error) {
       console.error('Error creating funding request:', error);
-      toast.error(error.response?.data?.detail || 'Failed to create funding request');
+      toast.error(error.detail || 'Failed to create funding request');
     } finally {
       setLoading(false);
     }
@@ -738,6 +744,50 @@ const ProjectCollaboration = () => {
     } catch (error) {
       console.error('Error contributing:', error);
       toast.error(error.detail || 'Failed to contribute');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCloseFunding = async (fundingId) => {
+    try {
+      setLoading(true);
+      await closeFundingRequest(fundingId);
+      // Refresh funding data
+      const [allFunding, completedFunding] = await Promise.all([
+        fetchFundingRequests(),
+        fetchCompletedFundingRequests()
+      ]);
+      setFundingRequests(allFunding);
+      setCompletedFundingRequests(completedFunding);
+      toast.success('Funding request closed successfully');
+    } catch (error) {
+      console.error('Error closing funding request:', error);
+      toast.error('Failed to close funding request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteFunding = async (fundingId) => {
+    if (!window.confirm('Are you sure you want to delete this funding request?')) {
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      await deleteFundingRequest(fundingId);
+      // Refresh funding data
+      const [allFunding, completedFunding] = await Promise.all([
+        fetchFundingRequests(),
+        fetchCompletedFundingRequests()
+      ]);
+      setFundingRequests(allFunding);
+      setCompletedFundingRequests(completedFunding);
+      toast.success('Funding request deleted successfully');
+    } catch (error) {
+      console.error('Error deleting funding request:', error);
+      toast.error('Failed to delete funding request');
     } finally {
       setLoading(false);
     }
@@ -1838,7 +1888,31 @@ const ProjectCollaboration = () => {
                         className="bg-slate-900/50 rounded-xl border border-slate-700 p-6 cursor-pointer hover:border-slate-500 transition-all duration-200"
                         onClick={() => setSelectedFunding(funding)}
                       >
-                        <h3 className="text-xl font-semibold text-slate-200 mb-2">{funding.title}</h3>
+                        <div className="flex justify-between items-start mb-4">
+                          <h3 className="text-xl font-semibold text-slate-200">{funding.title}</h3>
+                          {funding.project?.creator?.id === currentUser?.id && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCloseFunding(funding.id);
+                                }}
+                                className="px-2 py-1 bg-yellow-600 hover:bg-yellow-700 text-white rounded text-sm"
+                              >
+                                Close
+                              </button>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteFunding(funding.id);
+                                }}
+                                className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                         <div className="flex justify-between items-center mb-4">
                           <span className="text-slate-400">Amount: ₹{funding.amount}</span>
                           <span className="text-slate-400">Collected: ₹{funding.collected_amount}</span>
@@ -1846,24 +1920,63 @@ const ProjectCollaboration = () => {
                         <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
                           <div
                             className="bg-indigo-600 h-2.5 rounded-full"
-                            style={{ width: `${funding.progress_percentage}%` }}
+                            style={{ width: `${funding.progress_percentage || 0}%` }}
                           ></div>
                         </div>
                         <div className="text-right text-sm text-slate-400">
-                          {funding.progress_percentage.toFixed(1)}% funded
+                          {(funding.progress_percentage || 0).toFixed(1)}% funded
                         </div>
                       </div>
                     ))}
                   </div>
                 ) : (
                   <div className="text-center text-slate-400 py-8">
-                    <p>No funding requests available.</p>
+                    <p>No active funding requests available.</p>
                     <button 
                       onClick={() => setShowFundingForm(true)}
                       className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
                       Create Funding Request
                     </button>
+                  </div>
+                )}
+
+                {/* Completed Funding Requests Section */}
+                {completedFundingRequests.length > 0 && (
+                  <div className="mt-12">
+                    <h2 className="text-xl font-bold text-slate-100 mb-6">Completed Funding Requests</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {completedFundingRequests.map((funding) => (
+                        <div
+                          key={funding.id}
+                          className="bg-slate-900/50 rounded-xl border border-slate-700 p-6"
+                        >
+                          <div className="flex justify-between items-start mb-4">
+                            <h3 className="text-xl font-semibold text-slate-200">{funding.title}</h3>
+                            <span className={`px-2 py-1 rounded text-sm ${
+                              funding.status === 'completed' 
+                                ? 'bg-green-900/30 text-green-400' 
+                                : 'bg-yellow-900/30 text-yellow-400'
+                            }`}>
+                              {funding.status === 'completed' ? 'Completed' : 'Closed'}
+                            </span>
+                          </div>
+                          <div className="flex justify-between items-center mb-4">
+                            <span className="text-slate-400">Amount: ₹{funding.amount}</span>
+                            <span className="text-slate-400">Collected: ₹{funding.collected_amount}</span>
+                          </div>
+                          <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
+                            <div
+                              className="bg-indigo-600 h-2.5 rounded-full"
+                              style={{ width: `${funding.progress_percentage || 0}%` }}
+                            ></div>
+                          </div>
+                          <div className="text-right text-sm text-slate-400">
+                            {(funding.progress_percentage || 0).toFixed(1)}% funded
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
@@ -1893,11 +2006,11 @@ const ProjectCollaboration = () => {
                       <div className="w-full bg-gray-700 rounded-full h-2.5 mb-4">
                         <div
                           className="bg-blue-600 h-2.5 rounded-full"
-                          style={{ width: `${selectedFunding.progress_percentage}%` }}
+                          style={{ width: `${selectedFunding.progress_percentage || 0}%` }}
                         ></div>
                       </div>
                       <div className="text-right text-sm text-gray-400 mb-4">
-                        {selectedFunding.progress_percentage.toFixed(1)}% funded
+                        {(selectedFunding.progress_percentage || 0).toFixed(1)}% funded
                       </div>
                       <button
                         onClick={() => setShowContributionForm(true)}

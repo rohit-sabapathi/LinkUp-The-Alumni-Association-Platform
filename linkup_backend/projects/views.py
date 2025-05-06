@@ -1,6 +1,6 @@
 from rest_framework import viewsets, permissions, status, generics, filters
 from rest_framework.response import Response
-from rest_framework.decorators import action
+from rest_framework.decorators import action, api_view, permission_classes
 from django.shortcuts import get_object_or_404
 from django.db.models import Q
 from rest_framework import serializers
@@ -51,7 +51,8 @@ from .serializers import (
     ProjectInvitationCreateSerializer,
     ProjectInvitationStatusUpdateSerializer,
     FundingSerializer,
-    FundingContributionSerializer
+    FundingContributionSerializer,
+    FundingCreateSerializer
 )
 
 User = get_user_model()
@@ -1467,6 +1468,11 @@ class FundingViewSet(viewsets.ModelViewSet):
     serializer_class = FundingSerializer
     queryset = Funding.objects.all()
 
+    def get_serializer_class(self):
+        if self.action == 'create':
+            return FundingCreateSerializer
+        return FundingSerializer
+
     def get_queryset(self):
         return Funding.objects.filter(status='active')
 
@@ -1474,6 +1480,14 @@ class FundingViewSet(viewsets.ModelViewSet):
         context = super().get_serializer_context()
         context['request'] = self.request
         return context
+
+    @action(detail=False, methods=['get'])
+    def completed(self, request):
+        completed_funding = Funding.objects.filter(
+            status__in=['completed', 'closed']
+        ).order_by('-created_at')
+        serializer = self.get_serializer(completed_funding, many=True)
+        return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
     def contribute(self, request, pk=None):
@@ -1535,4 +1549,50 @@ class FundingViewSet(viewsets.ModelViewSet):
         funding.status = new_status
         funding.save()
         serializer = self.get_serializer(funding)
-        return Response(serializer.data) 
+        return Response(serializer.data)
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def close_funding_request(request, funding_id):
+    try:
+        funding = Funding.objects.get(id=funding_id)
+        if funding.project.creator != request.user:
+            return Response(
+                {'detail': 'Only the project creator can close this funding request'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        funding.status = 'closed'
+        funding.save()
+        return Response({'status': 'success'})
+    except Funding.DoesNotExist:
+        return Response(
+            {'detail': 'Funding request not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def delete_funding_request(request, funding_id):
+    try:
+        funding = Funding.objects.get(id=funding_id)
+        if funding.project.creator != request.user:
+            return Response(
+                {'detail': 'Only the project creator can delete this funding request'},
+                status=status.HTTP_403_FORBIDDEN
+            )
+        funding.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+    except Funding.DoesNotExist:
+        return Response(
+            {'detail': 'Funding request not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_completed_funding_requests(request):
+    completed_funding = Funding.objects.filter(
+        status__in=['completed', 'closed']
+    ).order_by('-created_at')
+    serializer = FundingSerializer(completed_funding, many=True)
+    return Response(serializer.data) 

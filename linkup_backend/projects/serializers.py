@@ -6,6 +6,7 @@ from .models import (
     Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask,
     ProjectInvitation, Funding
 )
+from decimal import Decimal, InvalidOperation
 
 User = get_user_model()
 
@@ -759,33 +760,47 @@ class ProjectInvitationStatusUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 class FundingSerializer(serializers.ModelSerializer):
+    project = ProjectListSerializer(read_only=True)
     project_title = serializers.CharField(source='project.title', read_only=True)
+    project_creator = serializers.CharField(source='project.creator.username', read_only=True)
     progress_percentage = serializers.SerializerMethodField()
     qr_code_url = serializers.SerializerMethodField()
-
+    
     class Meta:
         model = Funding
-        fields = ['id', 'project', 'project_title', 'title', 'description', 'amount', 
-                 'collected_amount', 'progress_percentage', 'qr_code_url', 'created_at', 'status']
-        read_only_fields = ['collected_amount', 'status']
-
+        fields = [
+            'id', 'project', 'project_title', 'project_creator',
+            'title', 'description', 'amount', 'collected_amount',
+            'qr_code', 'qr_code_url', 'created_at', 'status',
+            'progress_percentage', 'note'
+        ]
+        read_only_fields = ['collected_amount', 'status', 'progress_percentage']
+    
     def get_progress_percentage(self, obj):
-        return obj.get_progress_percentage()
-
+        return (obj.collected_amount / obj.amount * 100) if obj.amount > 0 else 0
+    
     def get_qr_code_url(self, obj):
-        request = self.context.get('request')
         if obj.qr_code and hasattr(obj.qr_code, 'url'):
-            return request.build_absolute_uri(obj.qr_code.url) if request else obj.qr_code.url
+            request = self.context.get('request')
+            if request is not None:
+                return request.build_absolute_uri(obj.qr_code.url)
         return None
 
-    def validate_project(self, value):
-        # Check if the user is the creator of the project
-        if value.creator != self.context['request'].user:
-            raise serializers.ValidationError("You can only create funding requests for your own projects")
-        return value
+    def validate_amount(self, value):
+        try:
+            # Convert to Decimal if it's a string
+            if isinstance(value, str):
+                value = Decimal(value)
+            if value <= 0:
+                raise serializers.ValidationError("Amount must be greater than zero")
+            return value
+        except (ValueError, TypeError, InvalidOperation):
+            raise serializers.ValidationError("Invalid amount value")
 
     def create(self, validated_data):
-        validated_data['status'] = 'active'
+        # Ensure amount is a Decimal
+        if 'amount' in validated_data:
+            validated_data['amount'] = Decimal(str(validated_data['amount']))
         return super().create(validated_data)
 
 class FundingContributionSerializer(serializers.ModelSerializer):
@@ -808,4 +823,30 @@ class FundingContributionSerializer(serializers.ModelSerializer):
         if value > remaining_amount:
             raise serializers.ValidationError(f"Contribution amount cannot exceed remaining amount of ₹{remaining_amount}")
         
-        return value 
+        return value
+
+class FundingCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Funding
+        fields = [
+            'id', 'project', 'title', 'description', 'amount',
+            'qr_code', 'note'
+        ]
+        read_only_fields = ['id']
+
+    def validate_amount(self, value):
+        try:
+            # Convert to Decimal if it's a string
+            if isinstance(value, str):
+                value = Decimal(value)
+            if value <= 0:
+                raise serializers.ValidationError("Amount must be greater than zero")
+            return value
+        except (ValueError, TypeError, InvalidOperation):
+            raise serializers.ValidationError("Invalid amount value")
+
+    def create(self, validated_data):
+        # Ensure amount is a Decimal
+        if 'amount' in validated_data:
+            validated_data['amount'] = Decimal(str(validated_data['amount']))
+        return super().create(validated_data) 

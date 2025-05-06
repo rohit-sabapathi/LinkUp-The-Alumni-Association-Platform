@@ -24,7 +24,10 @@ from .views import (
     # Project invitation views
     ProjectInvitationViewSet,
     UserInvitationsView,
-    FundingViewSet
+    FundingViewSet,
+    close_funding_request,
+    delete_funding_request,
+    get_completed_funding_requests
 )
 
 router = DefaultRouter()
@@ -57,4 +60,6 @@ urlpatterns = [
     # Progress Log routes
     path('workspace/<slug:workspace_slug>/progress-logs/', WorkspaceProgressLogsView.as_view(), name='workspace-progress-logs'),
     path('workspace/<slug:workspace_slug>/current-week-log/', CurrentWeekProgressLogView.as_view(), name='current-week-log'),
+    path('funding/<int:funding_id>/close/', close_funding_request, name='close-funding'),
+    path('funding/<int:funding_id>/delete/', delete_funding_request, name='delete-funding'),
 ] 
