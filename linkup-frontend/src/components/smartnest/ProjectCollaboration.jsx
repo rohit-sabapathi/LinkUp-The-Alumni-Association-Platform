@@ -708,7 +708,27 @@ const ProjectCollaboration = () => {
       }
 
       const newFundingRequest = await createFundingRequest(formData);
-      setFundingRequests(prev => [...prev, newFundingRequest]);
+      
+      // Find the project details to get creator information
+      const projectDetails = userProjects.find(p => p.id === fundingForm.projectId);
+      
+      // Ensure all necessary fields are present in the new funding request
+      const completeFundingRequest = {
+        ...newFundingRequest,
+        qr_code_url: newFundingRequest.qr_code_url || URL.createObjectURL(fundingForm.qrCode),
+        progress_percentage: 0,
+        collected_amount: 0,
+        status: 'active',
+        project: {
+          ...newFundingRequest.project,
+          creator: {
+            id: currentUser?.id,
+            username: currentUser?.username
+          }
+        }
+      };
+      
+      setFundingRequests(prev => [...prev, completeFundingRequest]);
       setShowFundingForm(false);
       setFundingForm({
         projectId: '',
