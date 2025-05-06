@@ -1835,21 +1835,21 @@ const ProjectCollaboration = () => {
                     {fundingRequests.map((funding) => (
                       <div
                         key={funding.id}
-                        className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                        className="bg-slate-900/50 rounded-xl border border-slate-700 p-6 cursor-pointer hover:border-slate-500 transition-all duration-200"
                         onClick={() => setSelectedFunding(funding)}
                       >
-                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{funding.title}</h3>
+                        <h3 className="text-xl font-semibold text-slate-200 mb-2">{funding.title}</h3>
                         <div className="flex justify-between items-center mb-4">
-                          <span className="text-gray-600">Amount: ₹{funding.amount}</span>
-                          <span className="text-gray-600">Collected: ₹{funding.collected_amount}</span>
+                          <span className="text-slate-400">Amount: ₹{funding.amount}</span>
+                          <span className="text-slate-400">Collected: ₹{funding.collected_amount}</span>
                         </div>
-                        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div className="w-full bg-slate-700 rounded-full h-2.5 mb-4">
                           <div
-                            className="bg-blue-600 h-2.5 rounded-full"
+                            className="bg-indigo-600 h-2.5 rounded-full"
                             style={{ width: `${funding.progress_percentage}%` }}
                           ></div>
                         </div>
-                        <div className="text-right text-sm text-gray-500">
+                        <div className="text-right text-sm text-slate-400">
                           {funding.progress_percentage.toFixed(1)}% funded
                         </div>
                       </div>
@@ -1869,34 +1869,34 @@ const ProjectCollaboration = () => {
 
                 {selectedFunding && !showContributionForm && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                    <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-2xl w-full border border-gray-700">
                       <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-2xl font-semibold text-gray-900">{selectedFunding.title}</h3>
+                        <h3 className="text-2xl font-semibold text-white">{selectedFunding.title}</h3>
                         <button
                           onClick={() => setSelectedFunding(null)}
-                          className="text-gray-500 hover:text-gray-700"
+                          className="text-gray-400 hover:text-gray-200"
                         >
                           <XMarkIcon className="h-6 w-6" />
                         </button>
                       </div>
-                      <p className="text-gray-600 mb-4">{selectedFunding.description}</p>
+                      <p className="text-gray-300 mb-4">{selectedFunding.description}</p>
                       <div className="grid grid-cols-2 gap-4 mb-4">
                         <div>
-                          <p className="text-sm text-gray-500">Total Amount</p>
-                          <p className="text-lg font-semibold">₹{selectedFunding.amount}</p>
+                          <p className="text-sm text-gray-400">Total Amount</p>
+                          <p className="text-lg font-semibold text-white">₹{selectedFunding.amount}</p>
                         </div>
                         <div>
-                          <p className="text-sm text-gray-500">Collected Amount</p>
-                          <p className="text-lg font-semibold">₹{selectedFunding.collected_amount}</p>
+                          <p className="text-sm text-gray-400">Collected Amount</p>
+                          <p className="text-lg font-semibold text-white">₹{selectedFunding.collected_amount}</p>
                         </div>
                       </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                      <div className="w-full bg-gray-700 rounded-full h-2.5 mb-4">
                         <div
                           className="bg-blue-600 h-2.5 rounded-full"
                           style={{ width: `${selectedFunding.progress_percentage}%` }}
                         ></div>
                       </div>
-                      <div className="text-right text-sm text-gray-500 mb-4">
+                      <div className="text-right text-sm text-gray-400 mb-4">
                         {selectedFunding.progress_percentage.toFixed(1)}% funded
                       </div>
                       <button
@@ -1911,48 +1911,48 @@ const ProjectCollaboration = () => {
 
                 {showContributionForm && selectedFunding && (
                   <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                    <div className="bg-[#1a1a1a] rounded-lg p-6 max-w-md w-full border border-gray-700">
                       <div className="flex justify-between items-start mb-4">
-                        <h3 className="text-xl font-semibold text-gray-900">Contribute to {selectedFunding.title}</h3>
+                        <h3 className="text-xl font-semibold text-white">Contribute to {selectedFunding.title}</h3>
                         <button
                           onClick={() => {
                             setShowContributionForm(false);
                             setSelectedFunding(null);
                           }}
-                          className="text-gray-500 hover:text-gray-700"
+                          className="text-gray-400 hover:text-gray-200"
                         >
                           <XMarkIcon className="h-6 w-6" />
                         </button>
                       </div>
                       <form onSubmit={handleContribute} className="space-y-4">
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             Amount (₹)
                           </label>
                           <input
                             type="number"
                             value={contributionForm.amount}
                             onChange={(e) => setContributionForm(prev => ({ ...prev, amount: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 bg-[#2a2a2a] border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
                             required
                             min="1"
                             step="0.01"
                           />
                         </div>
                         <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                          <label className="block text-sm font-medium text-gray-300 mb-1">
                             Note (Optional)
                           </label>
                           <textarea
                             value={contributionForm.note}
                             onChange={(e) => setContributionForm(prev => ({ ...prev, note: e.target.value }))}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 py-2 bg-[#2a2a2a] border border-gray-700 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-white"
                             rows="3"
                           />
                         </div>
                         {selectedFunding.qr_code_url && (
                           <div className="mt-4">
-                            <p className="text-sm font-medium text-gray-700 mb-2">Scan QR Code to Pay</p>
+                            <p className="text-sm font-medium text-gray-300 mb-2">Scan QR Code to Pay</p>
                             <img
                               src={selectedFunding.qr_code_url}
                               alt="Payment QR Code"
