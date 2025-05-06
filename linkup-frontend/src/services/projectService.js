@@ -419,4 +419,41 @@ export const respondToInvitation = async (invitationId, status) => {
     console.error('Error responding to invitation:', error);
     throw error.response?.data || { detail: 'Failed to respond to invitation' };
   }
+};
+
+// Funding related API calls
+export const createFundingRequest = async (formData) => {
+  try {
+    const response = await axios.post(`${API_URL}/funding/`, formData, {
+      headers: {
+        ...getAuthHeader(),
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  } catch (error) {
+    console.error('Error creating funding request:', error);
+    throw error.response?.data || { detail: 'Failed to create funding request' };
+  }
+};
+
+export const fetchFundingRequests = async () => {
+  const response = await axios.get(`${API_URL}/funding/`, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const fetchMyFundingRequests = async () => {
+  const response = await axios.get(`${API_URL}/funding/my_funding_requests/`, {
+    headers: getAuthHeader()
+  });
+  return response.data;
+};
+
+export const updateFundingStatus = async (fundingId, status) => {
+  const response = await axios.post(`${API_URL}/funding/${fundingId}/update_status/`, { status }, {
+    headers: getAuthHeader()
+  });
+  return response.data;
 }; 

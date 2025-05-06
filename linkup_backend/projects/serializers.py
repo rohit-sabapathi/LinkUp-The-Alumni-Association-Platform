@@ -4,7 +4,7 @@ from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
     Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask,
-    ProjectInvitation
+    ProjectInvitation, Funding
 )
 
 User = get_user_model()
@@ -756,4 +756,37 @@ class ProjectInvitationStatusUpdateSerializer(serializers.ModelSerializer):
                 role=instance.role
             )
             
-        return instance 
+        return instance
+
+class FundingSerializer(serializers.ModelSerializer):
+    project_title = serializers.CharField(source='project.title', read_only=True)
+    project_id = serializers.IntegerField(source='project.id', read_only=True)
+    creator_username = serializers.CharField(source='project.creator.username', read_only=True)
+    qr_code_url = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Funding
+        fields = [
+            'id', 'project', 'project_id', 'project_title', 'title', 
+            'description', 'amount', 'qr_code', 'qr_code_url', 
+            'created_at', 'status', 'creator_username'
+        ]
+        read_only_fields = ['created_at', 'status']
+
+    def get_qr_code_url(self, obj):
+        if obj.qr_code:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.qr_code.url)
+        return None
+
+    def validate_project(self, value):
+        # Check if the user is the creator of the project
+        if value.creator != self.context['request'].user:
+            raise serializers.ValidationError("You can only create funding requests for your own projects")
+        return value
+
+    def create(self, validated_data):
+        # Set default status to 'active'
+        validated_data['status'] = 'active'
+        return super().create(validated_data) 

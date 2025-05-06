@@ -23,7 +23,8 @@ from .views import (
     CurrentWeekProgressLogView,
     # Project invitation views
     ProjectInvitationViewSet,
-    UserInvitationsView
+    UserInvitationsView,
+    FundingViewSet
 )
 
 router = DefaultRouter()
@@ -39,6 +40,7 @@ router.register(r'task-comments', TaskCommentViewSet, basename='task-comment')
 router.register(r'progress-logs', ProgressLogViewSet, basename='progress-log')
 # Register Project Invitation endpoints
 router.register(r'project-invitations', ProjectInvitationViewSet, basename='project-invitation')
+router.register(r'funding', FundingViewSet, basename='funding')
 router.register(r'', ProjectViewSet, basename='project')
 
 urlpatterns = [

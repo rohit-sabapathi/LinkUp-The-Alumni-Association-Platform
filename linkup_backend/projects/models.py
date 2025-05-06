@@ -474,4 +474,25 @@ class ProgressLogTask(models.Model):
         unique_together = ('progress_log', 'task')
     
     def __str__(self):
-        return f"Task update for {self.task.title} in week {self.progress_log.week_number}" 
+        return f"Task update for {self.task.title} in week {self.progress_log.week_number}"
+
+class Funding(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Active'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    )
+    
+    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='funding_requests')
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    amount = models.DecimalField(max_digits=10, decimal_places=2)
+    qr_code = models.ImageField(upload_to='funding_qr_codes/')
+    created_at = models.DateTimeField(auto_now_add=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.title} - {self.project.title}" 

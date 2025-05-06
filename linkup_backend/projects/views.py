@@ -6,12 +6,13 @@ from django.db.models import Q
 from rest_framework import serializers
 from datetime import datetime
 from django.contrib.auth import get_user_model
+from rest_framework.permissions import IsAuthenticated
 
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
     ResourceCategory, Resource, Board, Column, 
     Task, TaskAssignment, TaskComment, ProgressLog, ProgressLogTask,
-    ProjectInvitation
+    ProjectInvitation, Funding
 )
 from .serializers import (
     ProjectListSerializer, 
@@ -47,7 +48,8 @@ from .serializers import (
     # Project Invitation Serializers
     ProjectInvitationSerializer,
     ProjectInvitationCreateSerializer,
-    ProjectInvitationStatusUpdateSerializer
+    ProjectInvitationStatusUpdateSerializer,
+    FundingSerializer
 )
 
 User = get_user_model()
@@ -1456,4 +1458,44 @@ class UserInvitationsView(generics.ListAPIView):
             
             invitations_data.append(invitation_data)
         
-        return Response(invitations_data) 
+        return Response(invitations_data)
+
+class FundingViewSet(viewsets.ModelViewSet):
+    serializer_class = FundingSerializer
+    permission_classes = [IsAuthenticated]
+
+    def get_queryset(self):
+        # Return all active funding requests
+        return Funding.objects.filter(status='active')
+
+    def get_serializer_context(self):
+        context = super().get_serializer_context()
+        context['request'] = self.request
+        return context
+
+    def perform_create(self, serializer):
+        serializer.save()
+
+    @action(detail=False, methods=['get'])
+    def my_funding_requests(self, request):
+        # Get funding requests for projects created by the user
+        user_projects = Project.objects.filter(creator=request.user)
+        funding_requests = Funding.objects.filter(project__in=user_projects)
+        serializer = self.get_serializer(funding_requests, many=True)
+        return Response(serializer.data)
+
+    @action(detail=True, methods=['post'])
+    def update_status(self, request, pk=None):
+        funding = self.get_object()
+        new_status = request.data.get('status')
+        
+        if new_status not in ['active', 'completed', 'cancelled']:
+            return Response(
+                {'error': 'Invalid status'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+            
+        funding.status = new_status
+        funding.save()
+        serializer = self.get_serializer(funding)
+        return Response(serializer.data) 

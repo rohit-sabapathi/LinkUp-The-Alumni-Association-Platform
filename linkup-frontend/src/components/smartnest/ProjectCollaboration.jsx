@@ -27,7 +27,11 @@ import {
   updateJoinRequestStatus,
   fetchUserWorkspaces,
   fetchUserInvitations,
-  respondToInvitation
+  respondToInvitation,
+  createFundingRequest,
+  fetchFundingRequests,
+  fetchMyFundingRequests,
+  updateFundingStatus
 } from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -80,6 +84,17 @@ const ProjectCollaboration = () => {
   // Add state for project invitations
   const [invitations, setInvitations] = useState([]);
   const [respondingInvitation, setRespondingInvitation] = useState(null);
+
+  // Add these new state variables after the existing state declarations
+  const [showFundingForm, setShowFundingForm] = useState(false);
+  const [fundingForm, setFundingForm] = useState({
+    projectId: '',
+    title: '',
+    description: '',
+    amount: '',
+    qrCode: null
+  });
+  const [fundingRequests, setFundingRequests] = useState([]);
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -310,10 +325,34 @@ const ProjectCollaboration = () => {
     }
   }, [activeTab]);
 
+  // Update the useEffect for funding tab
+  useEffect(() => {
+    if (activeTab === 'funding') {
+      const loadFundingData = async () => {
+        setLoading(true);
+        try {
+          const [allFunding, myFunding] = await Promise.all([
+            fetchFundingRequests(),
+            fetchMyFundingRequests()
+          ]);
+          setFundingRequests(allFunding);
+        } catch (error) {
+          console.error('Error fetching funding requests:', error);
+          toast.error('Failed to load funding requests');
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      loadFundingData();
+    }
+  }, [activeTab]);
+
   const tabs = [
     { id: 'projects', label: 'Projects' },
     { id: 'workspaces', label: 'Workspaces' },
-    { id: 'request-status', label: 'Request Status' }
+    { id: 'request-status', label: 'Request Status' },
+    { id: 'funding', label: 'Funding' }
   ];
 
   const projectTypes = [
@@ -618,6 +657,59 @@ const ProjectCollaboration = () => {
       toast.error('Failed to process your response');
     } finally {
       setRespondingInvitation(null);
+    }
+  };
+
+  // Add this new function after the existing functions
+  const handleFundingInputChange = (e) => {
+    const { name, value } = e.target;
+    setFundingForm({
+      ...fundingForm,
+      [name]: value
+    });
+  };
+
+  const handleQRCodeChange = (e) => {
+    if (e.target.files[0]) {
+      setFundingForm({
+        ...fundingForm,
+        qrCode: e.target.files[0]
+      });
+    }
+  };
+
+  const handleSubmitFunding = async (e) => {
+    e.preventDefault();
+    
+    try {
+      setLoading(true);
+      
+      // Create FormData object
+      const formData = new FormData();
+      formData.append('project', fundingForm.projectId);
+      formData.append('title', fundingForm.title);
+      formData.append('description', fundingForm.description);
+      formData.append('amount', fundingForm.amount);
+      if (fundingForm.qrCode) {
+        formData.append('qr_code', fundingForm.qrCode);
+      }
+
+      const newFundingRequest = await createFundingRequest(formData);
+      setFundingRequests(prev => [...prev, newFundingRequest]);
+      setShowFundingForm(false);
+      setFundingForm({
+        projectId: '',
+        title: '',
+        description: '',
+        amount: '',
+        qrCode: null
+      });
+      toast.success('Funding request created successfully!');
+    } catch (error) {
+      console.error('Error creating funding request:', error);
+      toast.error(error.response?.data?.detail || 'Failed to create funding request');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1570,6 +1662,203 @@ const ProjectCollaboration = () => {
                   </div>
                 )}
               </>
+            )}
+          </div>
+        )}
+
+        {/* Funding Tab */}
+        {!loading && activeTab === 'funding' && (
+          <div className="space-y-8">
+            {!showFundingForm && (
+              <div className="flex justify-center">
+                <button 
+                  onClick={() => setShowFundingForm(true)}
+                  className="flex items-center px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors duration-200"
+                >
+                  <PlusIcon className="w-5 h-5 mr-2" />
+                  Create Funding Request
+                </button>
+              </div>
+            )}
+
+            {/* Funding Form */}
+            {showFundingForm && (
+              <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
+                <div className="flex justify-between items-center mb-6">
+                  <h2 className="text-xl font-bold text-slate-100">Create Funding Request</h2>
+                  <button 
+                    onClick={() => setShowFundingForm(false)}
+                    className="p-1 hover:bg-slate-700 rounded-full"
+                  >
+                    <XMarkIcon className="w-5 h-5 text-slate-400" />
+                  </button>
+                </div>
+
+                <form onSubmit={handleSubmitFunding} className="space-y-6">
+                  <div>
+                    <label htmlFor="projectId" className="block text-sm font-medium text-slate-300 mb-1">
+                      Select Project <span className="text-red-500">*</span>
+                    </label>
+                    <select
+                      id="projectId"
+                      name="projectId"
+                      value={fundingForm.projectId}
+                      onChange={handleFundingInputChange}
+                      required
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    >
+                      <option value="" disabled>Select a project</option>
+                      {userProjects.map(project => (
+                        <option key={project.id} value={project.id}>{project.title}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label htmlFor="title" className="block text-sm font-medium text-slate-300 mb-1">
+                      Funding Title <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      id="title"
+                      name="title"
+                      value={fundingForm.title}
+                      onChange={handleFundingInputChange}
+                      required
+                      placeholder="e.g., Initial Development Funding"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="description" className="block text-sm font-medium text-slate-300 mb-1">
+                      Description <span className="text-red-500">*</span>
+                    </label>
+                    <textarea
+                      id="description"
+                      name="description"
+                      value={fundingForm.description}
+                      onChange={handleFundingInputChange}
+                      required
+                      rows="4"
+                      placeholder="Describe why you need funding and how it will be used"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    ></textarea>
+                  </div>
+
+                  <div>
+                    <label htmlFor="amount" className="block text-sm font-medium text-slate-300 mb-1">
+                      Amount (₹) <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="number"
+                      id="amount"
+                      name="amount"
+                      value={fundingForm.amount}
+                      onChange={handleFundingInputChange}
+                      required
+                      min="1"
+                      placeholder="Enter amount in Rupees"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="qrCode" className="block text-sm font-medium text-slate-300 mb-1">
+                      Payment QR Code <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="file"
+                      id="qrCode"
+                      name="qrCode"
+                      onChange={handleQRCodeChange}
+                      required
+                      accept="image/*"
+                      className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded-lg text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    />
+                    <p className="mt-1 text-sm text-slate-400">Upload your payment QR code image</p>
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowFundingForm(false)}
+                      className="px-4 py-2 border border-slate-600 rounded-lg text-slate-300 hover:bg-slate-700"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                      disabled={loading}
+                    >
+                      {loading ? 'Creating...' : 'Create Funding Request'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* Funding Requests List */}
+            {!showFundingForm && (
+              <div className="space-y-6">
+                <h2 className="text-xl font-bold text-slate-100">Active Funding Requests</h2>
+                
+                {fundingRequests.length > 0 ? (
+                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {fundingRequests.map(request => (
+                      <div
+                        key={request.id}
+                        className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700"
+                      >
+                        <div className="p-5">
+                          <h3 className="text-lg font-semibold text-slate-200 mb-2">{request.title}</h3>
+                          <p className="text-slate-400 text-sm mb-4">{request.description}</p>
+                          
+                          <div className="mb-4">
+                            <span className="text-2xl font-bold text-indigo-400">₹{request.amount}</span>
+                          </div>
+                          
+                          {request.qr_code_url && (
+                            <div className="mb-4">
+                              <img 
+                                src={request.qr_code_url} 
+                                alt="Payment QR Code" 
+                                className="w-full h-48 object-contain bg-white rounded-lg"
+                              />
+                            </div>
+                          )}
+                          
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-500">
+                              Created {new Date(request.created_at).toLocaleDateString()}
+                            </span>
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                              request.status === 'active' 
+                                ? 'bg-green-900/30 text-green-400'
+                                : request.status === 'completed'
+                                ? 'bg-blue-900/30 text-blue-400'
+                                : 'bg-red-900/30 text-red-400'
+                            }`}>
+                              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center text-slate-400 py-8">
+                    <p>No funding requests available.</p>
+                    <button 
+                      onClick={() => setShowFundingForm(true)}
+                      className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                    >
+                      Create Funding Request
+                    </button>
+                  </div>
+                )}
+              </div>
             )}
           </div>
         )}
