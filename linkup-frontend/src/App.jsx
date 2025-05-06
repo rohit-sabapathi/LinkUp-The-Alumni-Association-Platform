@@ -22,7 +22,7 @@ import ProjectWorkspace from './components/smartnest/ProjectWorkspace';
 import Mentorship from './components/smartnest/Mentorship';
 import GameCorner from './components/smartnest/games/GameCorner';
 import WordleGame from './components/smartnest/games/WordleGame';
-import PuzzleGame from './components/smartnest/games/PuzzleGame';
+import ConnectionsGame from './components/smartnest/games/ConnectionsGame';
 import FindMentor from './components/mentorship/FindMentor';
 import MentorDetail from './components/mentorship/MentorDetail';
 import BecomeMentor from './components/mentorship/BecomeMentor';
@@ -187,10 +187,10 @@ const AppContent = () => {
           />
 
           <Route
-            path="/smartnest/games/puzzle"
+            path="/smartnest/games/connections"
             element={
               <ProtectedRoute>
-                <PuzzleGame />
+                <ConnectionsGame />
               </ProtectedRoute>
             }
           />

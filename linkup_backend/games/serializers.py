@@ -1,6 +1,14 @@
 from rest_framework import serializers
 from django.contrib.auth import get_user_model
-from .models import DailyWord, WordleGame, WordleGuess
+from .models import (
+    DailyWord, 
+    WordleGame, 
+    WordleGuess,
+    ConnectionsSet,
+    ConnectionsGroup,
+    ConnectionsWord,
+    ConnectionsGame
+)
 
 User = get_user_model()
 
@@ -12,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
 class DailyWordSerializer(serializers.ModelSerializer):
     class Meta:
         model = DailyWord
-        fields = ['id', 'date']  # Exclude the actual word to prevent cheating
+        fields = ['id', 'word', 'date']
 
 class WordleGuessSerializer(serializers.ModelSerializer):
     class Meta:
@@ -45,14 +53,55 @@ class LeaderboardEntrySerializer(serializers.ModelSerializer):
     def get_time_taken(self, obj):
         return obj.time_taken()
 
-class CreateGuessSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = WordleGuess
-        fields = ['guess']
-        
+class CreateGuessSerializer(serializers.Serializer):
+    guess = serializers.CharField(
+        min_length=5,
+        max_length=5,
+        required=True
+    )
+    
     def validate_guess(self, value):
-        if len(value) != 5:
-            raise serializers.ValidationError("Guess must be exactly 5 letters.")
         if not value.isalpha():
-            raise serializers.ValidationError("Guess must contain only letters.")
-        return value.lower() 
+            raise serializers.ValidationError("Guess must contain only alphabetic characters")
+        return value.upper()  # Convert to uppercase
+
+class UserBriefSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'username', 'profile_image']
+
+class ConnectionsWordSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ConnectionsWord
+        fields = ['id', 'word']
+
+class ConnectionsGroupSerializer(serializers.ModelSerializer):
+    words = ConnectionsWordSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ConnectionsGroup
+        fields = ['id', 'name', 'description', 'difficulty', 'color', 'words']
+
+class ConnectionsSetSerializer(serializers.ModelSerializer):
+    groups = ConnectionsGroupSerializer(many=True, read_only=True)
+    
+    class Meta:
+        model = ConnectionsSet
+        fields = ['id', 'date', 'groups']
+
+class ConnectionsGameSerializer(serializers.ModelSerializer):
+    connections_set = ConnectionsSetSerializer(read_only=True)
+    
+    class Meta:
+        model = ConnectionsGame
+        fields = [
+            'id', 'connections_set', 'start_time', 'end_time', 
+            'mistakes', 'is_solved', 'groups_found'
+        ]
+
+class ConnectionsGuessSerializer(serializers.Serializer):
+    word_ids = serializers.ListField(
+        child=serializers.IntegerField(),
+        min_length=4,
+        max_length=4
+    ) 
