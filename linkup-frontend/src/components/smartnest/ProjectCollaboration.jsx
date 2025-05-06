@@ -31,7 +31,8 @@ import {
   createFundingRequest,
   fetchFundingRequests,
   fetchMyFundingRequests,
-  updateFundingStatus
+  updateFundingStatus,
+  contributeToFunding
 } from '../../services/projectService';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -95,6 +96,12 @@ const ProjectCollaboration = () => {
     qrCode: null
   });
   const [fundingRequests, setFundingRequests] = useState([]);
+  const [selectedFunding, setSelectedFunding] = useState(null);
+  const [showContributionForm, setShowContributionForm] = useState(false);
+  const [contributionForm, setContributionForm] = useState({
+    amount: '',
+    note: ''
+  });
 
   // Fetch projects on component mount
   useEffect(() => {
@@ -708,6 +715,29 @@ const ProjectCollaboration = () => {
     } catch (error) {
       console.error('Error creating funding request:', error);
       toast.error(error.response?.data?.detail || 'Failed to create funding request');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleContribute = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      await contributeToFunding(selectedFunding.id, contributionForm);
+      // Refresh funding requests
+      const [allFunding, myFunding] = await Promise.all([
+        fetchFundingRequests(),
+        fetchMyFundingRequests()
+      ]);
+      setFundingRequests(allFunding);
+      setShowContributionForm(false);
+      setSelectedFunding(null);
+      setContributionForm({ amount: '', note: '' });
+      toast.success('Contribution successful!');
+    } catch (error) {
+      console.error('Error contributing:', error);
+      toast.error(error.detail || 'Failed to contribute');
     } finally {
       setLoading(false);
     }
@@ -1668,7 +1698,7 @@ const ProjectCollaboration = () => {
 
         {/* Funding Tab */}
         {!loading && activeTab === 'funding' && (
-          <div className="space-y-8">
+          <div className="space-y-6">
             {!showFundingForm && (
               <div className="flex justify-center">
                 <button 
@@ -1681,8 +1711,7 @@ const ProjectCollaboration = () => {
               </div>
             )}
 
-            {/* Funding Form */}
-            {showFundingForm && (
+            {showFundingForm ? (
               <div className="bg-slate-900/50 rounded-xl p-6 border border-slate-700">
                 <div className="flex justify-between items-center mb-6">
                   <h2 className="text-xl font-bold text-slate-100">Create Funding Request</h2>
@@ -1797,52 +1826,31 @@ const ProjectCollaboration = () => {
                   </div>
                 </form>
               </div>
-            )}
-
-            {/* Funding Requests List */}
-            {!showFundingForm && (
+            ) : (
               <div className="space-y-6">
                 <h2 className="text-xl font-bold text-slate-100">Active Funding Requests</h2>
                 
                 {fundingRequests.length > 0 ? (
-                  <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {fundingRequests.map(request => (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {fundingRequests.map((funding) => (
                       <div
-                        key={request.id}
-                        className="bg-slate-900/50 rounded-xl overflow-hidden border border-slate-700"
+                        key={funding.id}
+                        className="bg-white rounded-lg shadow-md p-6 cursor-pointer hover:shadow-lg transition-shadow"
+                        onClick={() => setSelectedFunding(funding)}
                       >
-                        <div className="p-5">
-                          <h3 className="text-lg font-semibold text-slate-200 mb-2">{request.title}</h3>
-                          <p className="text-slate-400 text-sm mb-4">{request.description}</p>
-                          
-                          <div className="mb-4">
-                            <span className="text-2xl font-bold text-indigo-400">₹{request.amount}</span>
-                          </div>
-                          
-                          {request.qr_code_url && (
-                            <div className="mb-4">
-                              <img 
-                                src={request.qr_code_url} 
-                                alt="Payment QR Code" 
-                                className="w-full h-48 object-contain bg-white rounded-lg"
-                              />
-                            </div>
-                          )}
-                          
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-slate-500">
-                              Created {new Date(request.created_at).toLocaleDateString()}
-                            </span>
-                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                              request.status === 'active' 
-                                ? 'bg-green-900/30 text-green-400'
-                                : request.status === 'completed'
-                                ? 'bg-blue-900/30 text-blue-400'
-                                : 'bg-red-900/30 text-red-400'
-                            }`}>
-                              {request.status.charAt(0).toUpperCase() + request.status.slice(1)}
-                            </span>
-                          </div>
+                        <h3 className="text-xl font-semibold text-gray-900 mb-2">{funding.title}</h3>
+                        <div className="flex justify-between items-center mb-4">
+                          <span className="text-gray-600">Amount: ₹{funding.amount}</span>
+                          <span className="text-gray-600">Collected: ₹{funding.collected_amount}</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                          <div
+                            className="bg-blue-600 h-2.5 rounded-full"
+                            style={{ width: `${funding.progress_percentage}%` }}
+                          ></div>
+                        </div>
+                        <div className="text-right text-sm text-gray-500">
+                          {funding.progress_percentage.toFixed(1)}% funded
                         </div>
                       </div>
                     ))}
@@ -1856,6 +1864,111 @@ const ProjectCollaboration = () => {
                     >
                       Create Funding Request
                     </button>
+                  </div>
+                )}
+
+                {selectedFunding && !showContributionForm && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-2xl w-full">
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-2xl font-semibold text-gray-900">{selectedFunding.title}</h3>
+                        <button
+                          onClick={() => setSelectedFunding(null)}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <XMarkIcon className="h-6 w-6" />
+                        </button>
+                      </div>
+                      <p className="text-gray-600 mb-4">{selectedFunding.description}</p>
+                      <div className="grid grid-cols-2 gap-4 mb-4">
+                        <div>
+                          <p className="text-sm text-gray-500">Total Amount</p>
+                          <p className="text-lg font-semibold">₹{selectedFunding.amount}</p>
+                        </div>
+                        <div>
+                          <p className="text-sm text-gray-500">Collected Amount</p>
+                          <p className="text-lg font-semibold">₹{selectedFunding.collected_amount}</p>
+                        </div>
+                      </div>
+                      <div className="w-full bg-gray-200 rounded-full h-2.5 mb-4">
+                        <div
+                          className="bg-blue-600 h-2.5 rounded-full"
+                          style={{ width: `${selectedFunding.progress_percentage}%` }}
+                        ></div>
+                      </div>
+                      <div className="text-right text-sm text-gray-500 mb-4">
+                        {selectedFunding.progress_percentage.toFixed(1)}% funded
+                      </div>
+                      <button
+                        onClick={() => setShowContributionForm(true)}
+                        className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors"
+                      >
+                        Provide
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {showContributionForm && selectedFunding && (
+                  <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-lg p-6 max-w-md w-full">
+                      <div className="flex justify-between items-start mb-4">
+                        <h3 className="text-xl font-semibold text-gray-900">Contribute to {selectedFunding.title}</h3>
+                        <button
+                          onClick={() => {
+                            setShowContributionForm(false);
+                            setSelectedFunding(null);
+                          }}
+                          className="text-gray-500 hover:text-gray-700"
+                        >
+                          <XMarkIcon className="h-6 w-6" />
+                        </button>
+                      </div>
+                      <form onSubmit={handleContribute} className="space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Amount (₹)
+                          </label>
+                          <input
+                            type="number"
+                            value={contributionForm.amount}
+                            onChange={(e) => setContributionForm(prev => ({ ...prev, amount: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            required
+                            min="1"
+                            step="0.01"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">
+                            Note (Optional)
+                          </label>
+                          <textarea
+                            value={contributionForm.note}
+                            onChange={(e) => setContributionForm(prev => ({ ...prev, note: e.target.value }))}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            rows="3"
+                          />
+                        </div>
+                        {selectedFunding.qr_code_url && (
+                          <div className="mt-4">
+                            <p className="text-sm font-medium text-gray-700 mb-2">Scan QR Code to Pay</p>
+                            <img
+                              src={selectedFunding.qr_code_url}
+                              alt="Payment QR Code"
+                              className="w-48 h-48 mx-auto"
+                            />
+                          </div>
+                        )}
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="w-full bg-blue-600 text-white py-2 px-4 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
+                        >
+                          {loading ? 'Processing...' : 'Confirm Contribution'}
+                        </button>
+                      </form>
+                    </div>
                   </div>
                 )}
               </div>

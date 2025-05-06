@@ -7,6 +7,7 @@ from rest_framework import serializers
 from datetime import datetime
 from django.contrib.auth import get_user_model
 from rest_framework.permissions import IsAuthenticated
+from decimal import Decimal
 
 from .models import (
     Project, Workspace, ProjectMember, JoinRequest, 
@@ -49,7 +50,8 @@ from .serializers import (
     ProjectInvitationSerializer,
     ProjectInvitationCreateSerializer,
     ProjectInvitationStatusUpdateSerializer,
-    FundingSerializer
+    FundingSerializer,
+    FundingContributionSerializer
 )
 
 User = get_user_model()
@@ -1461,11 +1463,11 @@ class UserInvitationsView(generics.ListAPIView):
         return Response(invitations_data)
 
 class FundingViewSet(viewsets.ModelViewSet):
-    serializer_class = FundingSerializer
     permission_classes = [IsAuthenticated]
+    serializer_class = FundingSerializer
+    queryset = Funding.objects.all()
 
     def get_queryset(self):
-        # Return all active funding requests
         return Funding.objects.filter(status='active')
 
     def get_serializer_context(self):
@@ -1473,12 +1475,50 @@ class FundingViewSet(viewsets.ModelViewSet):
         context['request'] = self.request
         return context
 
-    def perform_create(self, serializer):
-        serializer.save()
+    @action(detail=True, methods=['post'])
+    def contribute(self, request, pk=None):
+        funding = self.get_object()
+        
+        # Check if funding request is active
+        if funding.status != 'active':
+            return Response(
+                {'error': 'This funding request is no longer active'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if funding is already completed
+        if funding.collected_amount >= funding.amount:
+            return Response(
+                {'error': 'This funding request has already reached its target amount'}, 
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = FundingContributionSerializer(
+            funding, 
+            data=request.data, 
+            context={'request': request, 'funding': funding}
+        )
+        
+        if serializer.is_valid():
+            contribution_amount = Decimal(request.data.get('amount', 0))
+            funding.collected_amount += contribution_amount
+            
+            # Update status to completed if target amount is reached
+            if funding.collected_amount >= funding.amount:
+                funding.status = 'completed'
+            
+            funding.save()
+            
+            # Return the updated funding request
+            return Response(
+                FundingSerializer(funding, context={'request': request}).data,
+                status=status.HTTP_200_OK
+            )
+            
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
     @action(detail=False, methods=['get'])
     def my_funding_requests(self, request):
-        # Get funding requests for projects created by the user
         user_projects = Project.objects.filter(creator=request.user)
         funding_requests = Funding.objects.filter(project__in=user_projects)
         serializer = self.get_serializer(funding_requests, many=True)
@@ -1489,11 +1529,8 @@ class FundingViewSet(viewsets.ModelViewSet):
         funding = self.get_object()
         new_status = request.data.get('status')
         
-        if new_status not in ['active', 'completed', 'cancelled']:
-            return Response(
-                {'error': 'Invalid status'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+        if new_status not in dict(Funding.STATUS_CHOICES):
+            return Response({'error': 'Invalid status'}, status=400)
             
         funding.status = new_status
         funding.save()

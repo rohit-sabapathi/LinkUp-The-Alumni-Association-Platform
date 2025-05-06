@@ -456,4 +456,17 @@ export const updateFundingStatus = async (fundingId, status) => {
     headers: getAuthHeader()
   });
   return response.data;
+};
+
+export const contributeToFunding = async (fundingId, contributionData) => {
+  try {
+    const response = await axios.post(`${API_URL}/funding/${fundingId}/contribute/`, 
+      contributionData,
+      { headers: getAuthHeader() }
+    );
+    return response.data;
+  } catch (error) {
+    console.error('Error contributing to funding:', error);
+    throw error.response?.data || { detail: 'Failed to contribute to funding' };
+  }
 }; 

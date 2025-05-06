@@ -760,24 +760,22 @@ class ProjectInvitationStatusUpdateSerializer(serializers.ModelSerializer):
 
 class FundingSerializer(serializers.ModelSerializer):
     project_title = serializers.CharField(source='project.title', read_only=True)
-    project_id = serializers.IntegerField(source='project.id', read_only=True)
-    creator_username = serializers.CharField(source='project.creator.username', read_only=True)
+    progress_percentage = serializers.SerializerMethodField()
     qr_code_url = serializers.SerializerMethodField()
 
     class Meta:
         model = Funding
-        fields = [
-            'id', 'project', 'project_id', 'project_title', 'title', 
-            'description', 'amount', 'qr_code', 'qr_code_url', 
-            'created_at', 'status', 'creator_username'
-        ]
-        read_only_fields = ['created_at', 'status']
+        fields = ['id', 'project', 'project_title', 'title', 'description', 'amount', 
+                 'collected_amount', 'progress_percentage', 'qr_code_url', 'created_at', 'status']
+        read_only_fields = ['collected_amount', 'status']
+
+    def get_progress_percentage(self, obj):
+        return obj.get_progress_percentage()
 
     def get_qr_code_url(self, obj):
-        if obj.qr_code:
-            request = self.context.get('request')
-            if request:
-                return request.build_absolute_uri(obj.qr_code.url)
+        request = self.context.get('request')
+        if obj.qr_code and hasattr(obj.qr_code, 'url'):
+            return request.build_absolute_uri(obj.qr_code.url) if request else obj.qr_code.url
         return None
 
     def validate_project(self, value):
@@ -787,6 +785,27 @@ class FundingSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
-        # Set default status to 'active'
         validated_data['status'] = 'active'
-        return super().create(validated_data) 
+        return super().create(validated_data)
+
+class FundingContributionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Funding
+        fields = ['id', 'amount', 'note']
+        read_only_fields = ['id']
+
+    def validate_amount(self, value):
+        funding = self.context.get('funding')
+        if not funding:
+            raise serializers.ValidationError("Funding request not found")
+        
+        # Check if contribution amount is valid
+        if value <= 0:
+            raise serializers.ValidationError("Contribution amount must be greater than 0")
+        
+        # Check if contribution would exceed the total amount needed
+        remaining_amount = funding.amount - funding.collected_amount
+        if value > remaining_amount:
+            raise serializers.ValidationError(f"Contribution amount cannot exceed remaining amount of ₹{remaining_amount}")
+        
+        return value 

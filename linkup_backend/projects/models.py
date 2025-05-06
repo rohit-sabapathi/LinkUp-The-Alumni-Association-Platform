@@ -487,12 +487,16 @@ class Funding(models.Model):
     title = models.CharField(max_length=200)
     description = models.TextField()
     amount = models.DecimalField(max_digits=10, decimal_places=2)
+    collected_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     qr_code = models.ImageField(upload_to='funding_qr_codes/')
     created_at = models.DateTimeField(auto_now_add=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
-
-    class Meta:
-        ordering = ['-created_at']
+    note = models.TextField(blank=True, null=True)
 
     def __str__(self):
-        return f"{self.title} - {self.project.title}" 
+        return f"{self.title} - {self.project.title}"
+
+    def get_progress_percentage(self):
+        if self.amount == 0:
+            return 0
+        return (self.collected_amount / self.amount) * 100 
