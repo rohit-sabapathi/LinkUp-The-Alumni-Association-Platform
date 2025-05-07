@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     'mentorship',
     'channels',
     'games',
+    'knowledge_hub',
     # Google Authentication
     'django.contrib.sites',
     'allauth',

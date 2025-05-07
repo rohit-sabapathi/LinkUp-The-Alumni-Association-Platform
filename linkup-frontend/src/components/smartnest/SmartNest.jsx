@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom';
-import { UserGroupIcon, AcademicCapIcon, SparklesIcon } from '@heroicons/react/24/outline';
+import { UserGroupIcon, AcademicCapIcon, SparklesIcon, BookOpenIcon } from '@heroicons/react/24/outline';
 import ChatBot from '../chatbot';
 const groqApiKey = import.meta.env.VITE_GROQ_API_KEY;
 const SmartNest = () => {
@@ -47,6 +47,20 @@ const SmartNest = () => {
             </div>
             <h2 className="text-xl font-semibold text-green-300">Game Corner</h2>
             <p className="text-slate-400">Take a break and have fun with brain-stimulating games</p>
+          </div>
+        </Link>
+
+        {/* Knowledge Hub Card */}
+        <Link 
+          to="/smartnest/knowledge-hub"
+          className="group p-6 bg-gradient-to-br from-amber-900/50 to-orange-900/50 rounded-xl border border-amber-800/50 hover:border-amber-600 transition-all duration-300 hover:shadow-lg hover:shadow-amber-500/10"
+        >
+          <div className="flex flex-col items-center text-center space-y-4">
+            <div className="p-4 rounded-full bg-amber-500/10 group-hover:bg-amber-500/20 transition-colors">
+              <BookOpenIcon className="h-10 w-10 text-amber-400" />
+            </div>
+            <h2 className="text-xl font-semibold text-amber-300">Knowledge Hub</h2>
+            <p className="text-slate-400">Explore articles and case studies from the alumni community</p>
           </div>
         </Link>
         

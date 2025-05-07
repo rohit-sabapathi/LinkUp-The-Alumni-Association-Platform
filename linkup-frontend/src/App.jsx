@@ -23,6 +23,8 @@ import Mentorship from './components/smartnest/Mentorship';
 import GameCorner from './components/smartnest/games/GameCorner';
 import WordleGame from './components/smartnest/games/WordleGame';
 import ConnectionsGame from './components/smartnest/games/ConnectionsGame';
+import KnowledgeHub from './components/smartnest/KnowledgeHub';
+import ArticlesAndCaseStudy from './components/smartnest/ArticlesAndCaseStudy';
 import FindMentor from './components/mentorship/FindMentor';
 import MentorDetail from './components/mentorship/MentorDetail';
 import BecomeMentor from './components/mentorship/BecomeMentor';
@@ -191,6 +193,24 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <ConnectionsGame />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/knowledge-hub"
+            element={
+              <ProtectedRoute>
+                <KnowledgeHub />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/knowledge-hub/articles"
+            element={
+              <ProtectedRoute>
+                <ArticlesAndCaseStudy />
               </ProtectedRoute>
             }
           />
