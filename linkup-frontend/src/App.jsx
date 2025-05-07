@@ -35,6 +35,7 @@ import MeetingRequests from './components/mentorship/MeetingRequests';
 import { ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 import DonationHome from './components/donations/DonationHome';
+import DiscussionForum from './components/smartnest/DiscussionForum';
 
 const AppContent = () => {
   const location = useLocation();
@@ -211,6 +212,15 @@ const AppContent = () => {
             element={
               <ProtectedRoute>
                 <ArticlesAndCaseStudy />
+              </ProtectedRoute>
+            }
+          />
+
+          <Route
+            path="/smartnest/knowledge-hub/discussion-forum"
+            element={
+              <ProtectedRoute>
+                <DiscussionForum />
               </ProtectedRoute>
             }
           />

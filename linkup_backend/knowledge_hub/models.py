@@ -84,3 +84,79 @@ class ArticleMedia(models.Model):
     ])
     url = models.URLField(blank=True, null=True)  # For YouTube videos
     created_at = models.DateTimeField(auto_now_add=True)
+
+# Discussion Forum Models
+class Question(models.Model):
+    title = models.CharField(max_length=200)
+    slug = models.SlugField(max_length=200, unique=True)
+    content = models.TextField()
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='questions')
+    tags = models.ManyToManyField(Tag, related_name='questions')
+    view_count = models.PositiveIntegerField(default=0)
+    upvote_count = models.PositiveIntegerField(default=0)
+    downvote_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = slugify(self.title)
+        super().save(*args, **kwargs)
+    
+    def __str__(self):
+        return self.title
+    
+    def get_absolute_url(self):
+        return reverse('question-detail', kwargs={'slug': self.slug})
+    
+    @property
+    def answer_count(self):
+        return self.answers.count()
+
+class Answer(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='answers')
+    content = models.TextField()
+    author = models.ForeignKey(User, on_delete=models.CASCADE, related_name='answers')
+    is_verified = models.BooleanField(default=False)
+    upvote_count = models.PositiveIntegerField(default=0)
+    downvote_count = models.PositiveIntegerField(default=0)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['-is_verified', '-upvote_count', 'created_at']
+    
+    def __str__(self):
+        return f"Answer to: {self.question.title[:30]}"
+
+class QuestionVote(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='votes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='question_votes')
+    value = models.SmallIntegerField(choices=[(1, 'Upvote'), (-1, 'Downvote')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('question', 'user')
+
+class AnswerVote(models.Model):
+    answer = models.ForeignKey(Answer, on_delete=models.CASCADE, related_name='votes')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='answer_votes')
+    value = models.SmallIntegerField(choices=[(1, 'Upvote'), (-1, 'Downvote')])
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('answer', 'user')
+
+class QuestionView(models.Model):
+    question = models.ForeignKey(Question, on_delete=models.CASCADE, related_name='views')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='question_views')
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        unique_together = ('question', 'user')
+        
+    def __str__(self):
+        return f"View by {self.user.username} on {self.question.title[:30]}"
