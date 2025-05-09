@@ -21,20 +21,32 @@ const MeetingRequests = () => {
   const [menteeRequests, setMenteeRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('mentor');
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     const fetchRequests = async () => {
       try {
+        // Set loading state first
+        setLoading(true);
+        setError(null);
+        
+        // Use Promise.all to fetch both types of requests in parallel
         const [mentorData, menteeData] = await Promise.all([
           getMeetingRequestsAsMentor(),
           getMeetingRequestsAsMentee()
         ]);
         
-        setMentorRequests(mentorData.filter(req => req.status === 'pending'));
-        setMenteeRequests(menteeData.filter(req => req.status === 'pending'));
+        console.log('Mentor Requests:', mentorData);
+        
+        // Only filter for pending requests
+        setMentorRequests(mentorData);
+        setMenteeRequests(menteeData);
+        
+        // Set loading to false once data is fetched
         setLoading(false);
       } catch (error) {
         console.error('Error fetching meeting requests:', error);
+        setError('Failed to load meeting requests');
         toast.error('Failed to load meeting requests');
         setLoading(false);
       }
@@ -43,11 +55,18 @@ const MeetingRequests = () => {
     fetchRequests();
   }, []);
 
+  // Filter the requests to display based on status
+  const pendingMentorRequests = mentorRequests.filter(req => req.status === 'pending');
+  const pendingMenteeRequests = menteeRequests.filter(req => req.status === 'pending');
+
   const handleAccept = async (requestId) => {
     try {
       await acceptMeetingRequest(requestId);
       toast.success('Meeting request accepted');
-      setMentorRequests(mentorRequests.filter(req => req.id !== requestId));
+      // Update the local state by filtering out the accepted request
+      setMentorRequests(mentorRequests.map(req => 
+        req.id === requestId ? {...req, status: 'accepted'} : req
+      ));
     } catch (error) {
       console.error('Error accepting request:', error);
       toast.error('Failed to accept meeting request');
@@ -58,7 +77,10 @@ const MeetingRequests = () => {
     try {
       await declineMeetingRequest(requestId);
       toast.success('Meeting request declined');
-      setMentorRequests(mentorRequests.filter(req => req.id !== requestId));
+      // Update the local state by filtering out the declined request
+      setMentorRequests(mentorRequests.map(req => 
+        req.id === requestId ? {...req, status: 'declined'} : req
+      ));
     } catch (error) {
       console.error('Error declining request:', error);
       toast.error('Failed to decline meeting request');
@@ -69,6 +91,22 @@ const MeetingRequests = () => {
     return (
       <div className="max-w-4xl mx-auto mt-12 flex justify-center">
         <Spinner size="large" text="Loading meeting requests..." />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-4xl mx-auto mt-12">
+        <div className="text-center py-8 bg-red-900/20 rounded-lg border border-red-800/30">
+          <p className="text-red-400">{error}</p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="mt-4 px-4 py-2 bg-slate-700 rounded-md text-sm"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -111,9 +149,9 @@ const MeetingRequests = () => {
 
       {/* Requests Content */}
       {activeTab === 'mentor' ? (
-        mentorRequests.length > 0 ? (
+        pendingMentorRequests.length > 0 ? (
           <div className="space-y-4">
-            {mentorRequests.map((request) => (
+            {pendingMentorRequests.map((request) => (
               <div 
                 key={request.id} 
                 className="p-4 bg-slate-800/50 rounded-lg"
@@ -165,9 +203,9 @@ const MeetingRequests = () => {
           </div>
         )
       ) : (
-        menteeRequests.length > 0 ? (
+        pendingMenteeRequests.length > 0 ? (
           <div className="space-y-4">
-            {menteeRequests.map((request) => (
+            {pendingMenteeRequests.map((request) => (
               <div 
                 key={request.id} 
                 className="p-4 bg-slate-800/50 rounded-lg"

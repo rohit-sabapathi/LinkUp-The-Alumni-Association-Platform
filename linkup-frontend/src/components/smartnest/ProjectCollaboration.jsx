@@ -1751,6 +1751,78 @@ const ProjectCollaboration = () => {
                         {receivedJoinRequests.map(request => (
                           <div key={request.id} className="bg-slate-800/30 rounded-xl border border-slate-700 overflow-hidden">
                             {/* ... existing code ... */}
+                            <div className="p-4 border-b border-slate-700">
+                              <div className="flex items-center justify-between mb-3">
+                                <h3 className="text-lg font-medium text-slate-200">
+                                  Request for {request.project_data.title}
+                                </h3>
+                                
+                                {request.status === 'pending' ? (
+                                  <div className="flex space-x-2">
+                                    <button
+                                      onClick={() => handleRequestStatusUpdate(request.id, 'accepted')}
+                                      className="p-2 bg-green-600/20 text-green-400 rounded-full hover:bg-green-600/30"
+                                      title="Accept Request"
+                                    >
+                                      <CheckIcon className="h-5 w-5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleRequestStatusUpdate(request.id, 'rejected')}
+                                      className="p-2 bg-red-600/20 text-red-400 rounded-full hover:bg-red-600/30"
+                                      title="Decline Request"
+                                    >
+                                      <XIcon className="h-5 w-5" />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                                    request.status === 'accepted' 
+                                      ? 'bg-green-900/30 text-green-400' 
+                                      : 'bg-red-900/30 text-red-400'
+                                  }`}>
+                                    {request.status === 'accepted' ? 'Accepted' : 'Declined'}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              <div className="text-sm text-slate-400 mb-2">
+                                From <span className="font-medium text-slate-300">{request.user.full_name || request.user.username}</span> on {new Date(request.created_at).toLocaleDateString()}
+                              </div>
+                              
+                              {request.motivation && (
+                                <div className="mt-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Motivation</h4>
+                                  <p className="text-slate-300 text-sm bg-slate-800/50 p-3 rounded-lg">
+                                    {request.motivation}
+                                  </p>
+                                </div>
+                              )}
+                              
+                              {request.skills && request.skills.length > 0 && (
+                                <div className="mt-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Skills</h4>
+                                  <div className="flex flex-wrap gap-2">
+                                    {request.skills.map((skill, index) => (
+                                      <span 
+                                        key={index}
+                                        className="px-2 py-1 bg-slate-700 text-slate-300 text-xs rounded-md"
+                                      >
+                                        {skill}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+                              
+                              {request.expertise && (
+                                <div className="mt-3">
+                                  <h4 className="text-sm font-medium text-slate-400 mb-1">Expertise</h4>
+                                  <p className="text-slate-300 text-sm bg-slate-800/50 p-3 rounded-lg">
+                                    {request.expertise}
+                                  </p>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
