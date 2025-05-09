@@ -62,7 +62,6 @@ api.interceptors.response.use(
         // If refresh fails, clear auth state and redirect to login
         localStorage.removeItem('token');
         localStorage.removeItem('refreshToken');
-        toast.error('Session expired. Please login again.');
         window.location.href = '/login';
         return Promise.reject(refreshError);
       }
@@ -77,7 +76,7 @@ api.interceptors.response.use(
         error.response?.data) || 
       error.message || 
       'An error occurred';
-    toast.error(errorMessage);
+    console.error(errorMessage);
     return Promise.reject(error);
   }
 );
@@ -131,6 +130,6 @@ export const handleApiError = (error) => {
       error.response?.data) || 
     error.message || 
     'An error occurred';
-  toast.error(message);
+  console.error(message);
   throw error;
 };
